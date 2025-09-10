@@ -38,6 +38,8 @@ CONF_DONT_PUBLISH = "dont_publish"
 CONF_CLASS = "class"
 CONF_CP1251 = "cp1251"
 
+CONF_PUSH_MODE = "push_mode"
+
 
 CONF_REBOOT_AFTER_FAILURE = "reboot_after_failure"
 
@@ -101,6 +103,7 @@ CONFIG_SCHEMA = cv.All(
                 min=0, max=100
             ),
             cv.Optional(CONF_CP1251, default=True): cv.boolean,
+            cv.Optional(CONF_PUSH_MODE, default=False): cv.boolean,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -132,6 +135,7 @@ async def to_code(config):
     cg.add(var.set_update_interval(config[CONF_UPDATE_INTERVAL]))
     cg.add(var.set_reboot_after_failure(config[CONF_REBOOT_AFTER_FAILURE]))
     cg.add(var.set_cp1251_conversion_required(config[CONF_CP1251]))
+    cg.add(var.set_push_mode(config[CONF_PUSH_MODE]))
     
     cg.add_library("GuruxDLMS", None, "https://github.com/latonita/GuruxDLMS.c#platformio")
     # Its a hard-copy of this one, which is a 2-y.o. fork of official gurux repo + platformio json lib file

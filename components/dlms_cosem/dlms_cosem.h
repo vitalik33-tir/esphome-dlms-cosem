@@ -1,29 +1,29 @@
 #pragma once
 
-#include "esphome/core/component.h"
-#include "esphome/components/uart/uart.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/uart/uart.h"
+#include "esphome/core/component.h"
 
 #ifdef USE_BINARY_SENSOR
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #endif
 
 #include <cstdint>
-#include <string>
-#include <memory>
-#include <map>
 #include <list>
+#include <map>
+#include <memory>
+#include <string>
 
-#include "dlms_cosem_uart.h"
 #include "dlms_cosem_sensor.h"
+#include "dlms_cosem_uart.h"
 #include "object_locker.h"
 
 //##include "gxignore-arduino.h"
 
-#include <dlmssettings.h>
 #include <client.h>
-#include <cosem.h>
 #include <converters.h>
+#include <cosem.h>
+#include <dlmssettings.h>
 
 //#define IEC_HANDSHAKE
 
@@ -31,6 +31,7 @@ namespace esphome {
 namespace dlms_cosem {
 
 static const size_t DEFAULT_IN_BUF_SIZE = 256;
+static const size_t DEFAULT_IN_BUF_SIZE_PUSH = 2048;
 static const size_t MAX_OUT_BUF_SIZE = 128;
 
 using SensorMap = std::multimap<std::string, DlmsCosemSensorBase *>;
@@ -40,6 +41,10 @@ using ReadFunction = std::function<size_t()>;
 
 using DlmsRequestMaker = std::function<int()>;
 using DlmsResponseParser = std::function<int()>;
+
+struct CosemObject;
+
+using RegisterCosemObjectFunction = std::function<void(const CosemObject &object)>;
 
 class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
  public:
@@ -74,6 +79,8 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void set_reboot_after_failure(uint16_t number_of_failures) { this->failures_before_reboot_ = number_of_failures; }
   void set_cp1251_conversion_required(bool required) { this->cp1251_conversion_required_ = required; }
 
+  void set_push_mode(bool push_mode) { this->operation_mode_push_ = push_mode; }
+
   bool has_error{true};
 
 #ifdef USE_BINARY_SENSOR
@@ -91,6 +98,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   uint16_t server_address_{1};
   bool auth_required_{false};
   std::string password_{""};
+  bool operation_mode_push_{false};
 
   uint32_t receive_timeout_ms_{500};
   uint32_t delay_between_requests_ms_{50};
@@ -126,6 +134,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
     DATA_NEXT,
     SESSION_RELEASE,
     DISCONNECT_REQ,
+    PUSH_DATA_PROCESS,  // Process received push data
     PUBLISH,
   } state_{State::NOT_INITIALIZED};
   State last_reported_state_{State::NOT_INITIALIZED};
@@ -151,17 +160,24 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void prepare_and_send_dlms_release();
   void prepare_and_send_dlms_disconnect();
 
+  void process_push_data();
+
   void send_dlms_req_and_next(DlmsRequestMaker maker, DlmsResponseParser parser, State next_state,
                               bool mission_critical = false, bool clear_buffer = true);
 
   int set_sensor_scale_and_unit(DlmsCosemSensor *sensor);
   int set_sensor_value(DlmsCosemSensorBase *sensor, const char *obis);
 
+  int set_sensor_value(const CosemObject &object);
+
   void indicate_transmission(bool transmission_on);
   void indicate_session(bool session_on);
   void indicate_connection(bool connection_on);
 
-  // void read_reply_and_go_next_state_(ReadFunction read_fn, State next_state, uint8_t retries, bool mission_critical,
+  bool is_push_mode() const { return this->operation_mode_push_; }
+
+  // void read_reply_and_go_next_state_(ReadFunction read_fn, State next_state,
+  // uint8_t retries, bool mission_critical,
   //                                    bool check_crc);
   struct {
     ReadFunction read_fn;
@@ -206,7 +222,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
 
     gxReplyData reply;
 
-    void init();
+    void init(size_t default_in_buf_size);
     void reset();
     void check_and_grow_input(uint16_t more_data);
     // next function shows whether there are still messages to send
@@ -230,6 +246,9 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   size_t receive_frame_(FrameStopFunction stop_fn);
   size_t receive_frame_ascii_();
   size_t receive_frame_hdlc_();
+
+  size_t receive_frame_raw_();
+  uint32_t time_raw_limit_{0};
 
   inline void update_last_rx_time_() { this->last_rx_time_ = millis(); }
   bool check_wait_timeout_() { return millis() - wait_.start_time >= wait_.delay_ms; }
@@ -258,16 +277,77 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   uint8_t failures_before_reboot_{0};
 
   const char *dlms_error_to_string(int error);
-  const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
 
   bool try_lock_uart_session_();
   void unlock_uart_session_();
+
+ public:
+  static const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
 
  private:
   static uint8_t next_obj_id_;
   std::string tag_;
 
   static std::string generateTag();
+};
+
+struct CosemObject {
+  uint8_t class_id{};
+  uint8_t attribute{};
+
+  uint8_t obis_code[32]{};
+
+  bool octet_obis_detected{false};
+  uint8_t lvl_when_obis_detected{0};
+
+  DLMS_DATA_TYPE value_type{DLMS_DATA_TYPE_NONE};
+
+  float value_numeric{};
+  std::string value_str{};
+
+  void reset() {
+    class_id = 0;
+
+    memset(obis_code, 0, sizeof(obis_code));
+    value_type = DLMS_DATA_TYPE_NONE;
+
+    value_str.clear();
+    value_numeric = 0.0f;
+    octet_obis_detected = false;
+    lvl_when_obis_detected = 0;
+  }
+};
+
+// xDLMS APDU parsing helpers
+class ApduParser {
+  const std::string tag_{"APDU_parser"};
+
+  RegisterCosemObjectFunction register_object_fn_{nullptr};
+
+  gxByteBuffer *buffer;
+  CosemObject object{};
+  size_t objects_found{};
+
+  bool is_numeric_type(DLMS_DATA_TYPE type);
+  float read_numeric_to_float(DLMS_DATA_TYPE type);
+
+  size_t test_if_date_time();
+
+  uint8_t peek_byte();
+  uint8_t read_byte();
+  uint16_t read_u16();
+  uint32_t read_u32();
+  bool read_obis_bytes(uint8_t *dest_string, const size_t dest_size);
+
+  bool scan_cosem_objects(uint8_t lvl = 0, DLMS_DATA_TYPE parent_type = DLMS_DATA_TYPE_NONE,
+                          uint8_t idx_in_structure = 0);
+
+ public:
+  ApduParser(gxByteBuffer *buf, RegisterCosemObjectFunction register_fn)
+      : buffer(buf), register_object_fn_(register_fn) {
+    object.reset();
+  };
+  size_t parse();
 };
 
 }  // namespace dlms_cosem

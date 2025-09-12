@@ -168,7 +168,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   int set_sensor_scale_and_unit(DlmsCosemSensor *sensor);
   int set_sensor_value(DlmsCosemSensorBase *sensor, const char *obis);
 
-  int set_sensor_value(const CosemObject &object);
+  int set_sensor_value(uint16_t, const uint8_t *, uint8_t, DLMS_DATA_TYPE, const uint8_t *, uint8_t);
 
   void indicate_transmission(bool transmission_on);
   void indicate_session(bool session_on);
@@ -276,78 +276,19 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
 
   uint8_t failures_before_reboot_{0};
 
-  const char *dlms_error_to_string(int error);
+  //const char *dlms_error_to_string(int error);
 
   bool try_lock_uart_session_();
   void unlock_uart_session_();
 
  public:
-  static const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
+  //static const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
 
  private:
   static uint8_t next_obj_id_;
   std::string tag_;
 
   static std::string generateTag();
-};
-
-struct CosemObject {
-  uint8_t class_id{};
-  uint8_t attribute{};
-
-  uint8_t obis_code[32]{};
-
-  bool octet_obis_detected{false};
-  uint8_t lvl_when_obis_detected{0};
-
-  DLMS_DATA_TYPE value_type{DLMS_DATA_TYPE_NONE};
-
-  float value_numeric{};
-  std::string value_str{};
-
-  void reset() {
-    class_id = 0;
-
-    memset(obis_code, 0, sizeof(obis_code));
-    value_type = DLMS_DATA_TYPE_NONE;
-
-    value_str.clear();
-    value_numeric = 0.0f;
-    octet_obis_detected = false;
-    lvl_when_obis_detected = 0;
-  }
-};
-
-// xDLMS APDU parsing helpers
-class ApduParser {
-  const std::string tag_{"APDU_parser"};
-
-  RegisterCosemObjectFunction register_object_fn_{nullptr};
-
-  gxByteBuffer *buffer;
-  CosemObject object{};
-  size_t objects_found{};
-
-  bool is_numeric_type(DLMS_DATA_TYPE type);
-  float read_numeric_to_float(DLMS_DATA_TYPE type);
-
-  size_t test_if_date_time();
-
-  uint8_t peek_byte();
-  uint8_t read_byte();
-  uint16_t read_u16();
-  uint32_t read_u32();
-  bool read_obis_bytes(uint8_t *dest_string, const size_t dest_size);
-
-  bool scan_cosem_objects(uint8_t lvl = 0, DLMS_DATA_TYPE parent_type = DLMS_DATA_TYPE_NONE,
-                          uint8_t idx_in_structure = 0);
-
- public:
-  ApduParser(gxByteBuffer *buf, RegisterCosemObjectFunction register_fn)
-      : buffer(buf), register_object_fn_(register_fn) {
-    object.reset();
-  };
-  size_t parse();
 };
 
 }  // namespace dlms_cosem

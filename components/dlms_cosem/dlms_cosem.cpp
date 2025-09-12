@@ -258,13 +258,17 @@ void DlmsCosemComponent::loop() {
       // Push mode listening logic
       if (this->is_push_mode()) {
         if (this->available() > 0) {
-          ESP_LOGV(TAG, "Push mode: incoming data detected");
-
-          this->indicate_transmission(true);
-
           // Set up for receiving push data
           memset(this->buffers_.in.data, 0, buffers_.in.capacity);
           this->buffers_.in.size = 0;
+          // read what we can then move forward to avoid buffer overflow
+          this->receive_frame_raw_();
+
+          ESP_LOGV(TAG, "Push mode: incoming data detected");
+          this->stats_.connections_tried_++;
+          this->loop_state_.session_started_ms = millis();
+
+          this->indicate_transmission(true);
 
           reading_state_.next_state = State::PUSH_DATA_PROCESS;
           reading_state_.mission_critical = false;  // Never critical in push mode
@@ -306,14 +310,17 @@ void DlmsCosemComponent::loop() {
       this->log_state_();
 
       if (this->check_rx_timeout_()) {
-        ESP_LOGE(TAG, "RX timeout.");
-        this->has_error = true;
+        if (this->is_push_mode()) {
+          ESP_LOGI(TAG, "Push data reception completed (timeout reached)");
+        } else {
+          ESP_LOGE(TAG, "RX timeout.");
+          this->has_error = true;
+          this->dlms_reading_state_.last_error = DLMS_ERROR_CODE_HARDWARE_FAULT;
+          this->stats_.invalid_frames_ += reading_state_.err_invalid_frames;
+        }
 
         this->indicate_connection(false);
         this->indicate_transmission(false);
-
-        this->dlms_reading_state_.last_error = DLMS_ERROR_CODE_HARDWARE_FAULT;
-        this->stats_.invalid_frames_ += reading_state_.err_invalid_frames;
 
         if (this->is_push_mode()) {
           // check if we received any data at all
@@ -596,7 +603,9 @@ void DlmsCosemComponent::loop() {
           this->crc_errors_per_session_sensor_->publish_state(this->stats_.crc_errors_per_session());
         }
         this->report_failure(false);
-        this->unlock_uart_session_();
+        if (!this->is_push_mode()) {
+          this->unlock_uart_session_();
+        }
         this->set_next_state_(State::IDLE);
         ESP_LOGD(TAG, "Total time: %u ms", millis() - this->loop_state_.session_started_ms);
       }

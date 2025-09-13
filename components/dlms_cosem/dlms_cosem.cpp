@@ -794,7 +794,7 @@ void DlmsCosemComponent::process_push_data() {
 
   AttributeDescriptorCallback fn = [this](auto... args) { (void) this->set_sensor_value(args...); };
 
-  AxdrStreamParser axdr_parser(&this->buffers_.in, fn);
+  AxdrStreamParser axdr_parser(&this->buffers_.in, fn, this->push_show_log_);
   size_t total_objects = 0;
   size_t iterations = 0;
 
@@ -1042,20 +1042,14 @@ size_t DlmsCosemComponent::receive_frame_hdlc_() {
   // HDLC frame: <FLAG>data<FLAG>
   auto frame_end_check_hdlc = [](uint8_t *b, size_t s) {
     auto ret = s >= 2 && b[0] == HDLC_FLAG && b[s - 1] == HDLC_FLAG;
-    // if (ret) {
-    //   ESP_LOGVV(TAG, "Frame HDLC Stop");
-    // }
     return ret;
   };
   return receive_frame_(frame_end_check_hdlc);
 }
 
 size_t DlmsCosemComponent::receive_frame_raw_() {
-  //  this->time_raw_limit_ = millis() + 1000;
   auto frame_end_check_timeout = [](uint8_t *b, size_t s) {
-    return false;
-    // auto ret = millis() > this->time_raw_limit_;
-    // return ret;
+    return false; // never stop by content, only by timeout
   };
   return receive_frame_(frame_end_check_timeout);
 }

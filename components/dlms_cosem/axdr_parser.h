@@ -26,6 +26,7 @@ class AxdrStreamParser {
 
   AttributeDescriptorCallback callback_;
   size_t objects_found = 0;
+  bool show_log_ = false;
 
   uint8_t peek_byte();
   uint8_t read_byte();
@@ -48,6 +49,6 @@ class AxdrStreamParser {
   bool skip_sequence(uint8_t type);
 
  public:
-  AxdrStreamParser(gxByteBuffer *buf, AttributeDescriptorCallback callback) : buffer(buf), callback_(callback) {}
+  AxdrStreamParser(gxByteBuffer *buf, AttributeDescriptorCallback callback, bool show_log) : buffer(buf), callback_(callback), show_log_(show_log) {}
   size_t parse();
 };

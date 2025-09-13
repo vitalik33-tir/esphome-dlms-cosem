@@ -80,6 +80,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void set_cp1251_conversion_required(bool required) { this->cp1251_conversion_required_ = required; }
 
   void set_push_mode(bool push_mode) { this->operation_mode_push_ = push_mode; }
+  void set_push_show_log(bool show_log) { this->push_show_log_ = show_log; }
 
   bool has_error{true};
 
@@ -99,6 +100,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   bool auth_required_{false};
   std::string password_{""};
   bool operation_mode_push_{false};
+  bool push_show_log_{false};
 
   uint32_t receive_timeout_ms_{500};
   uint32_t delay_between_requests_ms_{50};

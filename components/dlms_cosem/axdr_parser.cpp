@@ -282,18 +282,20 @@ bool AxdrStreamParser::parse_attribute_value(uint16_t class_id, const uint8_t *o
 
   this->objects_found++;
 
-  auto val_f = dlms_data_as_float((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
-  auto val_s = dlms_data_as_string((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
-
-  ESP_LOGI(TAG, "\n# %d", this->objects_found);
-  ESP_LOGI(TAG, "Found attribute descriptor: class_id=%d, obis=%d.%d.%d.%d.%d.%d, attr_id=%d, value_type=%02X",
-           class_id, obis_code[0], obis_code[1], obis_code[2], obis_code[3], obis_code[4], obis_code[5], attribute_id,
-           value_type);
-  ESP_LOGI(TAG, "Value type: %s at %d, len %d", dlms_data_type_to_string((DLMS_DATA_TYPE) value_type), value_position,
-           value_len);
-  ESP_LOGI(TAG, " as hex dump : %s", esphome::format_hex_pretty(value_ptr, value_len).c_str());
-  ESP_LOGI(TAG, " as string   :'%s'", val_s.c_str());
-  ESP_LOGI(TAG, " as number   : %f", val_f);
+  if (!this->show_log_) {
+    auto val_f = dlms_data_as_float((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
+    auto val_s = dlms_data_as_string((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
+    ESP_LOGI(TAG, "# %02d  .................................................................................... ",
+             this->objects_found);
+    ESP_LOGI(TAG, "Found attribute descriptor: class_id=%d, obis=%d.%d.%d.%d.%d.%d, attr_id=%d, value_type=%02X",
+             class_id, obis_code[0], obis_code[1], obis_code[2], obis_code[3], obis_code[4], obis_code[5], attribute_id,
+             value_type);
+    ESP_LOGI(TAG, "Value type: %s at %d, len %d", dlms_data_type_to_string((DLMS_DATA_TYPE) value_type), value_position,
+             value_len);
+    ESP_LOGI(TAG, " as hex dump : %s", esphome::format_hex_pretty(value_ptr, value_len).c_str());
+    ESP_LOGI(TAG, " as string   :'%s'", val_s.c_str());
+    ESP_LOGI(TAG, " as number   : %f", val_f);
+  }
 
   // Call the callback with the parsed attribute descriptor
   if (callback_) {
@@ -559,15 +561,9 @@ float dlms_data_as_float(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_
       return 0.0f;
     case DLMS_DATA_TYPE_FLOAT32:
       if (value_length >= 4) {
-        // Bytes on wire are big-endian. Ensure host float receives correct byte order.
-        uint8_t b[4] = {value_buffer_ptr[0], value_buffer_ptr[1], value_buffer_ptr[2], value_buffer_ptr[3]};
-// If host is little-endian, reverse order
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        std::swap(b[0], b[3]);
-        std::swap(b[1], b[2]);
-#endif
+        uint32_t u = be32(value_buffer_ptr);
         float f{};
-        std::memcpy(&f, b, sizeof(f));
+        std::memcpy(&f, &u, sizeof(f));
         return f;
       }
       return 0.0f;
@@ -576,10 +572,7 @@ float dlms_data_as_float(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_
         uint8_t b[8];
         for (int i = 0; i < 8; i++)
           b[i] = value_buffer_ptr[i];
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        for (int i = 0; i < 4; i++)
-          std::swap(b[i], b[7 - i]);
-#endif
+
         double d{};
         std::memcpy(&d, b, sizeof(d));
         return static_cast<float>(d);

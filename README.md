@@ -1,25 +1,57 @@
+[Russian version](README.md) [English version](README.end.md)
+
+
+[СПОДЭС/DLMS/COSEM](https://github.com/latonita/esphome-dlms-cosem) •
+[МЭК-61107/IEC-61107](https://github.com/latonita/esphome-iec61107-meter) •
+[Энергомера МЭК/IEC](https://github.com/latonita/esphome-energomera-iec) •
+[Энергомера CE](https://github.com/latonita/esphome-energomera-ce) •
+[СПб ЗИП ЦЭ2727А](https://github.com/latonita/esphome-ce2727a-meter) •
+[Ленэлектро ЛЕ-2](https://github.com/latonita/esphome-le2-meter) •
+[Пульсар-М](https://github.com/latonita/esphome-pulsar-m)
+
 # esphome-dlms-cosem
+Подключение EspHome к счетчикам электроэнергии по протоколу DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар, ZPA AM375 и многие другие) через RS-485 интерфейст или через оптопорт(*).
 
-Подключение ESPHome к счётчикам электроэнергии по DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар и др.) через RS‑485 или оптопорт (*).
+Два режима работы - запрос-ответ и режим ожидания данных от счетчика (PUSH).
 
-(*) Работа через оптопорт поддерживается для приборов, которые сразу используют скорость 9600 бод. Сценарий «сначала 300 бод, затем переход на 9600» пока не реализован.
+Инструкции по подключению esp32/esp8266 к счётчику можно увидеть в соседнем компоненте https://github.com/latonita/esphome-energomera-iec
 
-Связанная инструкция по физическому подключению ESP32/ESP8266 к счётчику: https://github.com/latonita/esphome-energomera-iec
+(*) Через оптопорт можно работать с приборами, которые сразу работают на скорости 9600. Вариант, когда необходимо сначала подключаться на скорости 300, а потом выходить на рабочую скорость - пока не поддерживается (нужно только найти того, кто сможет протестировать).
 
----
 
-## Кратко о возможностях
-- Поддержка протокола DLMS/COSEM (Mode E, HDLC)
-- Аутентификация: NONE и LOW (пароль)
-- Чтение базовых числовых типов (int/float)
-- Чтение текстовых данных (octet-string)
-- Корректная работа с русским текстом (cp1251 → UTF‑8)
-- Настройка логического и физического адресов
-- Поддержка нескольких счётчиков на одной шине
-- Работа в пассивном режиме (Push mode)
+# Оглавление
+- [Функции](#функции)
+  - [Реализованы](#реализованы)
+  - [Возможные задачи на будущее](#возможные-задачи-на-будущее)
+- [Настройка основного компонента (хаба)](#настройка-основного-компонента-хаба)
+  - [cp1251](#cp1251)
+  - [Чуть побольше о выборе адреса сервера и клиента](#чуть-побольше-о-выборе-адреса-сервера-и-клиента)
+- [Настройка сенсоров](#настройка-сенсоров)
+  - [Sensor](#sensor)
+  - [Text sensor](#text-sensor)
+  - [Binary sensor](#binary-sensor)
+- [Lambda](#lambda)
+- [Несколько счетчиков](#несколько-счетчиков)
+- [Особенности счетчиков](#особенности-счетчиков)
+  - [Нартис И100-W112](#нартис-и100-w112)
+  - [РиМ489.38 и другие из серии](#рим48938-и-другие-из-серии)
+- [Примеры конфигураций](#примеры-конфигураций)
+  - [Сессия - Однофазный счетчик (ПУ категории D)](#однофазный-счетчик-пу-категории-d)
+  - [PUSH - Трехфазный счетчик ZPA AM375](#трехфазный-счетчик-в-режиме-push)
 
-План на будущее:
-- Чтение/запись дат и времени
+# Функции
+## Реализованы
+- Подключние по бинарному протоколу HDLC без аутентификации (NONE) и с низким уровнем (LOW - доступ с паролем)
+- Работа в режиме опроса счетчика и режиме ожидания
+- Поддержка базовых цифровых типов данных (int/float)
+- Поддержка базовых текстовых данных (octet-string)
+- Поддержка русских символов в ответах от счетчиков (Нартис И100-W112, РиМ 489 , ... )
+- Задание логического и физического адресов
+- Работа с несколькими счетчиками на одной шине
+
+
+## Возможные задачи на будущее
+- Работа с данными типа datetime
 - Синхронизация времени
 - Управление реле
 - Полноценная работа через оптопорт по стандартной процедуре (300 → 9600)
@@ -43,7 +75,7 @@ external_components:
 ---
 
 ## Быстрый старт
-Минимальная конфигурация хаба и одного сенсора:
+### Минимальная конфигурация хаба и одного сенсора, режим запрос-ответ:
 
 ```yaml
 uart:
@@ -61,6 +93,33 @@ dlms_cosem:
   auth: true
   password: "12345678"
   update_interval: 60s
+
+sensor:
+  - platform: dlms_cosem
+    name: Active Power
+    obis_code: 1.0.1.7.0.255
+    unit_of_measurement: W
+    accuracy_decimals: 1
+    device_class: power
+    state_class: measurement
+```
+
+---
+
+### Минимальная конфигурация хаба и одного сенсора, режим PUSH:
+
+```yaml
+uart:
+  id: bus_1
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+dlms_cosem:
+  push_mode: true
 
 sensor:
   - platform: dlms_cosem
@@ -108,9 +167,10 @@ dlms_cosem:
 - **flow_control_pin** (*Optional*) — пин управления направлением RE/DE RS‑485‑модуля.
 - **id** (*Optional*) — идентификатор хаба (укажите, если их несколько).
 - **cp1251** (*Optional*) — конвертация cp1251 → UTF‑8 для текстовых значений. По умолчанию: true.
-- **push_mode** (*Optional*) — включить пассивный режим (Push mode), если поддерживается. По умолчанию: false.
+- **push_mode** (*Optional*) — включить пассивный режим (Push mode), если поддерживается. В режиме PUSH большинство параметров не имеют значения. По умолчанию: false.
 
 ### Адресация: client_address и server_address
+- Не требуется в режиме PUSH.
 - Если не указать, будут использованы значения по умолчанию (16 и 1). Но лучше свериться с документацией к конкретному счётчику.
 - Часто используется client_address = 32 (требуется пароль). Уровни по СПОДЭС:
 
@@ -194,6 +254,8 @@ output:
 
 ## Несколько счётчиков
 
+- NB: В режиме PUSH может быть только один счетчик на одной шине.
+
 ```yaml
 uart:
   - id: bus_1
@@ -260,71 +322,31 @@ sensor:
     accuracy_decimals: 1
     device_class: current
     state_class: measurement
+
 ```
 
----
+# Особенности счетчиков
 
-## Lambda‑помощники
+## Нартис И100-W112
 
-Доступна функция `update_server_address(logical_device, physical_device, addr_len)` — обновляет адрес и инициирует внеочередной опрос. Ниже пример перебора адресов вместе с бинарным сенсором `Connection` и выводом текущих значений в лог:
+- Передает тип ПУ на русском языке. Для текстового сенсора `0.0.96.1.1.255` необходимо установить `cp1251: true`
+- Иногда пароли и явки в инструкции отличаются от реальных. Пример рабочих параметро с одного из счетчиков:
 
-```yaml
-globals:
-  - id: logaddr
-    type: uint16_t
-    initial_value: '1'
+    * Пароль администрирования: 0000000100000001
+    * Пароль чтения: 00000001
+    * Логический адрес: 1
+    * Физический адрес: 17
+    * Размер адреса: 2
 
-  - id: phyaddr
-    type: uint16_t
-    initial_value: '1'
+## РиМ489.38 и другие из серии
+- Передает тип ПУ на русском языке. Для текстового сенсора `0.0.96.1.1.255` необходимо установить `cp1251: true`
 
-  - id: servaddr
-    type: uint16_t
-    initial_value: '1'
+# Примеры конфигураций
 
-binary_sensor:
-  - platform: dlms_cosem
-    connection:
-      name: Connection
-      on_release:
-        - lambda: |-
-            if (id(phyaddr) < 255) {
-              id(phyaddr)++;
-            } else {
-              id(logaddr)++;
-              id(phyaddr) = 1;
-            }
-            id(servaddr) = id(energo_01)->update_server_address(id(logaddr), id(phyaddr), 2);
-        - lambda: |-
-            ESP_LOGI("main", "Logical: %d, physical: %d, server: %d", (int) id(logaddr), (int) id(phyaddr), (int) id(servaddr));
+## Однофазный счетчик (ПУ категории D) 
+Используется список параметров ПУ категории D из стандарта СПОДЭС. Они применяются в однофазных ПУ потребителей.
 
-interval:
-  interval: 10s
-  then:
-    - lambda: |-
-        ESP_LOGI("main", "Logical: %d, physical: %d, server: %d", (int) id(logaddr), (int) id(phyaddr), (int) id(servaddr));
-```
-
----
-
-## Особенности отдельных счётчиков
-
-### Нартис И100‑W112
-- Тип ПУ отдаётся на русском языке. Для `0.0.96.1.1.255` включите `cp1251: true`.
-- Встречались расхождения паролей/адресов между инструкциями и реальностью. Пример рабочих параметров:
-  - Пароль администрирования: `0000000100000001`
-  - Пароль чтения: `00000001`
-  - Логический адрес: `1`
-  - Физический адрес: `17`
-  - Размер адреса: `2`
-
-### РиМ 489.38 (и серия)
-- Тип ПУ на русском — для `0.0.96.1.1.255` используйте `cp1251: true`.
-
----
-
-## Пример: однофазный счётчик (ПУ категории D)
-Набор параметров ПУ категории D по СПОДЭС. Проверено на Энергомера CE207‑SPds.
+Пример файла конфигурации, протестированого на Энергомера CE207-SPds.
 
 ```yaml
 esphome:
@@ -490,6 +512,128 @@ text_sensor:
     obis_code: 0.0.96.1.3.255
     entity_category: diagnostic
 ```
+
+
+## Трехфазный счетчик в режиме push
+
+Работа в режиме PUSH на примере счетчика ZPA AM375.
+
+```yaml
+esphome:
+  name: energomera-ce207-spds
+  friendly_name: Energomera-ce207-spds
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+external_components:
+  - source: github://latonita/esphome-dlms-cosem
+    components: [dlms_cosem]
+    refresh: 1s
+
+uart:
+  id: bus_1
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+dlms_cosem:
+  id: energo_01
+  client_address: 32
+  server_address: 1
+  auth: true
+  password: "12345678"
+  update_interval: 60s
+  receive_timeout: 1s
+
+dlms_cosem:
+  id: cosem1
+  uart_id: bus_1
+  push_mode: true
+
+text_sensor:
+  - platform: dlms_cosem
+    name: Serial number
+    obis_code: 0.0.96.1.1.255
+    entity_category: diagnostic
+
+  - platform: dlms_cosem
+    name: Current tariff
+    obis_code: 0.0.96.14.0.255
+    entity_category: diagnostic
+
+sensor:
+
+  - platform: dlms_cosem
+    id: active_energy_consumed
+    name: Energy
+    obis_code: 1.0.1.8.0.255
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: dlms_cosem
+    id: active_energy_consumed_t1
+    name: Energy T1
+    obis_code: 1.0.1.8.1.255
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: dlms_cosem
+    id: active_energy_consumed_t2
+    name: Energy T2
+    obis_code: 1.0.1.8.2.255
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: dlms_cosem
+    id: active_power
+    name: Active power Total
+    obis_code: 1.0.1.7.0.255
+    unit_of_measurement: W
+    accuracy_decimals: 1
+    device_class: power
+    state_class: measurement
+
+  - platform: dlms_cosem
+    id: active_power_l1
+    name: Active power L1
+    obis_code: 1.0.21.7.0.255
+    unit_of_measurement: W
+    accuracy_decimals: 1
+    device_class: power
+    state_class: measurement
+
+  - platform: dlms_cosem
+    id: active_power_l2
+    name: Active power L2
+    obis_code: 1.0.41.7.0.255
+    unit_of_measurement: W
+    accuracy_decimals: 1
+    device_class: power
+    state_class: measurement
+
+  - platform: dlms_cosem
+    id: active_power_l3
+    name: Active power L3
+    obis_code: 1.0.61.7.0.255
+    unit_of_measurement: W
+    accuracy_decimals: 1
+    device_class: power
+    state_class: measurement
+
+```
+
 
 ---
 

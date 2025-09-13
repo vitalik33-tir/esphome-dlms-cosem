@@ -28,7 +28,7 @@ static constexpr uint8_t HDLC_FLAG = 0x7E;
 static const uint8_t CMD_ACK_SET_BAUD_AND_MODE[] = {ACK, '0', '5', '1', CR, LF};
 static const uint8_t CMD_CLOSE_SESSION[] = {SOH, 0x42, 0x30, ETX, 0x75};
 
-static constexpr uint8_t BOOT_WAIT_S = 15;  // 10;
+static constexpr uint8_t BOOT_WAIT_S = 10;
 
 static char empty_str[] = "";
 
@@ -785,24 +785,39 @@ void DlmsCosemComponent::send_dlms_req_and_next(DlmsRequestMaker maker, DlmsResp
 }
 
 void DlmsCosemComponent::process_push_data() {
-  ESP_LOGD(TAG, "Processing push data frame with Naive APDU parser");
+  ESP_LOGD(TAG, "Processing PUSH data frame with AXDR parser");
 
-  // void(uint16_t, const uint8_t *, uint8_t, DLMS_DATA_TYPE, const uint8_t *, uint8_t)
-  //  class_id, obis_code, attribute_id, value_type, value_buffer_ptr, value_length
-  AttributeDescriptorCallback fn = [this](uint16_t class_id, const uint8_t *obis_code, uint8_t attribute_id,
-                                          DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr,
-                                          uint8_t value_length) {
-    this->set_sensor_value(class_id, obis_code, attribute_id, value_type, value_buffer_ptr, value_length);
-  };
+  // Ensure we parse from the beginning of the collected frame
+  this->buffers_.in.position = 0;
+  const auto total_size = this->buffers_.in.size;
+  ESP_LOGD(TAG, "PUSH frame size: %u bytes", static_cast<unsigned>(total_size));
 
-  AxdrParserFast axdr_parser(&this->buffers_.in, fn);
-  size_t cnt = 0;
+  AttributeDescriptorCallback fn = [this](auto... args) { (void) this->set_sensor_value(args...); };
+
+  AxdrStreamParser axdr_parser(&this->buffers_.in, fn);
+  size_t total_objects = 0;
+  size_t iterations = 0;
+
   while (this->buffers_.in.position < this->buffers_.in.size) {
-    cnt += axdr_parser.parse();
-    ESP_LOGV(TAG, "AXDR parser found %d objects", cnt);
+    auto before = this->buffers_.in.position;
+    auto parsed_now = axdr_parser.parse();
+    auto after = this->buffers_.in.position;
+    iterations++;
+
+    if (parsed_now == 0 && after == before) {
+      // No progress, avoid potential infinite loop on malformed frames
+      ESP_LOGW(TAG, "AXDR parser made no progress at pos=%u/%u, aborting", static_cast<unsigned>(after),
+               static_cast<unsigned>(this->buffers_.in.size));
+      break;
+    }
+    total_objects += parsed_now;
+    ESP_LOGV(TAG, "AXDR iteration %u: parsed=%u, pos=%u/%u, objects_total=%u", static_cast<unsigned>(iterations),
+             static_cast<unsigned>(parsed_now), static_cast<unsigned>(after),
+             static_cast<unsigned>(this->buffers_.in.size), static_cast<unsigned>(total_objects));
   }
 
-  ESP_LOGD(TAG, "Got %d COSEM objects from push data", cnt);
+  ESP_LOGD(TAG, "PUSH data parsing complete: %u objects, bytes consumed %u/%u", static_cast<unsigned>(total_objects),
+           static_cast<unsigned>(this->buffers_.in.position), static_cast<unsigned>(total_size));
 }
 
 int DlmsCosemComponent::set_sensor_value(uint16_t class_id, const uint8_t *obis_code, uint8_t attribute_id,
@@ -810,44 +825,30 @@ int DlmsCosemComponent::set_sensor_value(uint16_t class_id, const uint8_t *obis_
                                          uint8_t value_length) {
   static char obis_buf[32];
   auto er = hlp_getLogicalNameToString(obis_code, obis_buf);
-  // // find sensors in SensorMap this->sensors_ by OBIS code
-  // if (object.value_str.empty()) {
-  //   ESP_LOGV(TAG, "Setting sensor value OBIS %s. Numeric: %f", (char *) object.obis_code, object.value_numeric);
-
-  // } else {
-  //   ESP_LOGV(TAG, "Setting sensor value OBIS %s. Numeric: %f, Str: '%s'", (char *) object.obis_code,
-  //            object.value_numeric, object.value_str.c_str());
-  // }
-  // // Debug: print all registered sensors
-  // ESP_LOGD(TAG, "Available sensors (%d):", this->sensors_.size());
-  // for (const auto& sensor_pair : this->sensors_) {
-  //   ESP_LOGD(TAG, "  - Registered OBIS: '%s', Name: '%s'", sensor_pair.first.c_str(),
-  //   sensor_pair.second->get_sensor_name().c_str());
-  // }
 
   std::string obis_str(obis_buf);
-  //  ESP_LOGV(TAG, "Looking for OBIS string: '%s'", obis_str.c_str());
 
   auto range = this->sensors_.equal_range(obis_str);
   int found_count = 0;
   for (auto it = range.first; it != range.second; ++it) {
     DlmsCosemSensorBase *sensor = it->second;
     if (!sensor->shall_we_publish()) {
-      ESP_LOGD(TAG, "Sensor %s is not set to be published, skipping", sensor->get_sensor_name().c_str());
       continue;
     }
-    ESP_LOGD(TAG, "Found sensor %s for OBIS code %s", sensor->get_sensor_name().c_str(), obis_buf);
+    ESP_LOGD(TAG, "Found sensor for OBIS code %s: '%s' ", obis_buf, sensor->get_sensor_name().c_str());
     found_count++;
+
 #ifdef USE_SENSOR
     if (sensor->get_type() == SensorType::SENSOR) {
-
-      //static_cast<DlmsCosemSensor *>(sensor)->set_value(object.value_numeric);
+      float val = dlms_data_as_float(value_type, value_buffer_ptr, value_length);
+      static_cast<DlmsCosemSensor *>(sensor)->set_value(val);
     }
 #endif
+
 #ifdef USE_TEXT_SENSOR
     if (sensor->get_type() == SensorType::TEXT_SENSOR) {
-      // static_cast<DlmsCosemTextSensor *>(sensor)->set_value(object.value_str.c_str(),
-      //                                                       this->cp1251_conversion_required_);
+      auto val = dlms_data_as_string(value_type, value_buffer_ptr, value_length);
+      static_cast<DlmsCosemTextSensor *>(sensor)->set_value(val.c_str(), this->cp1251_conversion_required_);
     }
 #endif
   }
@@ -855,7 +856,7 @@ int DlmsCosemComponent::set_sensor_value(uint16_t class_id, const uint8_t *obis_
   if (found_count == 0) {
     ESP_LOGVV(TAG, "No sensor found for OBIS code: '%s'", (char *) obis_buf);
   } else {
-    ESP_LOGV(TAG, "Updated %d sensors for OBIS code: '%s'", found_count, (char *) obis_buf);
+    ESP_LOGVV(TAG, "Updated %d sensors for OBIS code: '%s'", found_count, (char *) obis_buf);
   }
 
   return DLMS_ERROR_CODE_OK;

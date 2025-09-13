@@ -1,9 +1,14 @@
 #include "axdr_parser.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
+#include <cstring>
+#include <sstream>
+#include <iomanip>
 
 constexpr const char *TAG = "dlms_cosem.axdr";
+// const std::string tag_{"AxdrStreamParser"};
 
-const char * dlms_error_to_string(int error) {
+const char *dlms_error_to_string(int error) {
   switch (error) {
     case DLMS_ERROR_CODE_OK:
       return "DLMS_ERROR_CODE_OK";
@@ -22,7 +27,7 @@ const char * dlms_error_to_string(int error) {
   }
 }
 
-const char * dlms_data_type_to_string(DLMS_DATA_TYPE vt) {
+const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt) {
   switch (vt) {
     case DLMS_DATA_TYPE_NONE:
       return "DLMS_DATA_TYPE_NONE";
@@ -79,67 +84,6 @@ const char * dlms_data_type_to_string(DLMS_DATA_TYPE vt) {
   }
 }
 
-// int hlp_getDataTypeSize(DLMS_DATA_TYPE type) {
-//   int size = -1;
-//   switch (type) {
-//     case DLMS_DATA_TYPE_BINARY_CODED_DECIMAL:
-//       size = 1;
-//       break;
-//     case DLMS_DATA_TYPE_BOOLEAN:
-//       size = 1;
-//       break;
-//     case DLMS_DATA_TYPE_DATE:
-//       size = 5;
-//       break;
-//     case DLMS_DATA_TYPE_DATETIME:
-//       size = 12;
-//       break;
-//     case DLMS_DATA_TYPE_ENUM:
-//       size = 1;
-//       break;
-
-//     case DLMS_DATA_TYPE_FLOAT32:
-//       size = 4;
-//       break;
-//     case DLMS_DATA_TYPE_FLOAT64:
-//       size = 8;
-//       break;
-//     case DLMS_DATA_TYPE_INT16:
-//       size = 2;
-//       break;
-//     case DLMS_DATA_TYPE_INT32:
-//       size = 4;
-//       break;
-//     case DLMS_DATA_TYPE_INT64:
-//       size = 8;
-//       break;
-//     case DLMS_DATA_TYPE_INT8:
-//       size = 1;
-//       break;
-//     case DLMS_DATA_TYPE_NONE:
-//       size = 0;
-//       break;
-//     case DLMS_DATA_TYPE_TIME:
-//       size = 4;
-//       break;
-//     case DLMS_DATA_TYPE_UINT16:
-//       size = 2;
-//       break;
-//     case DLMS_DATA_TYPE_UINT32:
-//       size = 4;
-//       break;
-//     case DLMS_DATA_TYPE_UINT64:
-//       size = 8;
-//       break;
-//     case DLMS_DATA_TYPE_UINT8:
-//       size = 1;
-//       break;
-//     default:
-//       break;
-//   }
-//   return size;
-// }
-
 bool hlp_isValueDataType(DLMS_DATA_TYPE type) {
   switch (type) {
     // Complex/Container types - NOT value types
@@ -178,25 +122,25 @@ bool hlp_isValueDataType(DLMS_DATA_TYPE type) {
   }
 }
 
-uint8_t AxdrParserFast::peek_byte() {
+uint8_t AxdrStreamParser::peek_byte() {
   if (this->buffer->position + 1 > this->buffer->size) {
-    ESP_LOGE(tag_.c_str(), "Buffer overflow in peek_byte at position %d", this->buffer->position);
+    // ESP_LOGVV(TAG, "Buffer overflow in peek_byte at position %d", this->buffer->position);
     return 0xFF;
   }
   return this->buffer->data[this->buffer->position];
 }
 
-uint8_t AxdrParserFast::read_byte() {
+uint8_t AxdrStreamParser::read_byte() {
   if (this->buffer->position + 1 > this->buffer->size) {
-    ESP_LOGE(tag_.c_str(), "Buffer overflow in read_byte at position %d", this->buffer->position);
+    //    ESP_LOGVV(TAG, "Buffer overflow in read_byte at position %d", this->buffer->position);
     return 0xFF;
   }
   return this->buffer->data[this->buffer->position++];
 }
 
-uint16_t AxdrParserFast::read_u16() {
+uint16_t AxdrStreamParser::read_u16() {
   if (this->buffer->position + 2 > this->buffer->size) {
-    ESP_LOGE(tag_.c_str(), "Buffer overflow in read_u16 at position %d", this->buffer->position);
+    //    ESP_LOGVV(TAG, "Buffer overflow in read_u16 at position %d", this->buffer->position);
     return 0xFFFF;
   }
   uint16_t value = (this->buffer->data[this->buffer->position] << 8) | this->buffer->data[this->buffer->position + 1];
@@ -204,9 +148,9 @@ uint16_t AxdrParserFast::read_u16() {
   return value;
 }
 
-uint32_t AxdrParserFast::read_u32() {
+uint32_t AxdrStreamParser::read_u32() {
   if (this->buffer->position + 4 > this->buffer->size) {
-    ESP_LOGE(tag_.c_str(), "Buffer overflow in read_u32 at position %d", this->buffer->position);
+    //    ESP_LOGV(TAG, "Buffer overflow in read_u32 at position %d", this->buffer->position);
     return 0xFFFFFFFF;
   }
   uint32_t value =
@@ -216,9 +160,9 @@ uint32_t AxdrParserFast::read_u32() {
   return value;
 }
 
-bool AxdrParserFast::test_if_date_time_12b() {
+bool AxdrStreamParser::test_if_date_time_12b() {
   if (this->buffer->position + 12 > this->buffer->size) {
-    ESP_LOGE(TAG, "Buffer overflow in date-time at position %d", this->buffer->position);
+    // ESP_LOGV(TAG, "Buffer overflow in date-time at position %d", this->buffer->position);
     return 0;
   }
 
@@ -280,7 +224,7 @@ constexpr uint8_t MAX_ATTRIBUTE_ID = 0x20;
 constexpr size_t MIN_UNTAGGED_ATTRIBUTE_DESCRIPTOR_SIZE = 9;
 constexpr size_t MIN_TAGGED_ATTRIBUTE_DESCRIPTOR_SIZE = 14;
 
-bool AxdrParserFast::with_position_rollback(std::function<bool(AxdrParserFast *)> func) {
+bool AxdrStreamParser::with_position_rollback(std::function<bool(AxdrStreamParser *)> func) {
   uint32_t saved_position = this->buffer->position;
   bool result = func(this);
   if (!result) {
@@ -289,24 +233,26 @@ bool AxdrParserFast::with_position_rollback(std::function<bool(AxdrParserFast *)
   return result;
 }
 
-bool AxdrParserFast::parse_attribute_value(uint16_t class_id, const uint8_t *obis_code, uint8_t attribute_id) {
+bool AxdrStreamParser::parse_attribute_value(uint16_t class_id, const uint8_t *obis_code, uint8_t attribute_id) {
   uint8_t value_type = read_byte();
 
   if (!hlp_isValueDataType((DLMS_DATA_TYPE) value_type)) {
-    ESP_LOGE(tag_.c_str(), "Unexpected non-value type %02X for attribute value at position %d", value_type,
+    ESP_LOGV(TAG, "Unexpected non-value type %02X for attribute value at position %d", value_type,
              this->buffer->position - 1);
     return false;
   };
-  
+
   const uint8_t *value_ptr = nullptr;
   uint8_t value_len = 0;
+
+  uint16_t value_position = this->buffer->position;
 
   int data_size = hlp_getDataTypeSize((DLMS_DATA_TYPE) value_type);
 
   if (data_size > 0) {
     // Fixed size data
     if (this->buffer->position + data_size > this->buffer->size) {
-      ESP_LOGE(tag_.c_str(), "Buffer overflow when reading value at position %d", this->buffer->position);
+      ESP_LOGV(TAG, "Buffer overflow when reading value at position %d", this->buffer->position);
       return false;
     }
     value_ptr = &this->buffer->data[this->buffer->position];
@@ -316,37 +262,47 @@ bool AxdrParserFast::parse_attribute_value(uint16_t class_id, const uint8_t *obi
     // Zero-length data (NONE type)
     value_ptr = nullptr;
     value_len = 0;
+    value_position--;
   } else {
     // Variable size data
     uint8_t length = read_byte();
     if (length == 0xFF) {
-      ESP_LOGE(tag_.c_str(), "Invalid variable size data length at position %d", this->buffer->position - 1);
+      ESP_LOGV(TAG, "Invalid variable size data length at position %d", this->buffer->position - 1);
       return false;
     }
     if (this->buffer->position + length > this->buffer->size) {
-      ESP_LOGE(tag_.c_str(), "Buffer overflow when reading variable size value at position %d", this->buffer->position);
+      ESP_LOGV(TAG, "Buffer overflow when reading variable size value at position %d", this->buffer->position);
       return false;
     }
-    value_ptr = &this->buffer->data[this->buffer->position];
+    value_position = this->buffer->position;
+    value_ptr = &this->buffer->data[value_position];
     value_len = length;
     this->buffer->position += length;
   }
 
   this->objects_found++;
+
+  auto val_f = dlms_data_as_float((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
+  auto val_s = dlms_data_as_string((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
+
+  ESP_LOGI(TAG, "\n# %d", this->objects_found);
+  ESP_LOGI(TAG, "Found attribute descriptor: class_id=%d, obis=%d.%d.%d.%d.%d.%d, attr_id=%d, value_type=%02X",
+           class_id, obis_code[0], obis_code[1], obis_code[2], obis_code[3], obis_code[4], obis_code[5], attribute_id,
+           value_type);
+  ESP_LOGI(TAG, "Value type: %s at %d, len %d", dlms_data_type_to_string((DLMS_DATA_TYPE) value_type), value_position,
+           value_len);
+  ESP_LOGI(TAG, " as hex dump : %s", esphome::format_hex_pretty(value_ptr, value_len).c_str());
+  ESP_LOGI(TAG, " as string   :'%s'", val_s.c_str());
+  ESP_LOGI(TAG, " as number   : %f", val_f);
+
   // Call the callback with the parsed attribute descriptor
   if (callback_) {
     callback_(class_id, obis_code, attribute_id, (DLMS_DATA_TYPE) value_type, value_ptr, value_len);
   }
-  // hlp_getLogicalNameToString
-
-  ESP_LOGI(tag_.c_str(), "Found attribute descriptor: class_id=%d, obis=%d.%d.%d.%d.%d.%d, attr_id=%d, value_type=%02X",
-           class_id, obis_code[0], obis_code[1], obis_code[2], obis_code[3], obis_code[4], obis_code[5], attribute_id,
-           value_type);
-
   return true;
 }
 
-bool AxdrParserFast::parse_attribute_descriptor_unsafe(bool tagged) {
+bool AxdrStreamParser::parse_attribute_descriptor_unsafe(bool tagged) {
   size_t min_size = tagged ? MIN_TAGGED_ATTRIBUTE_DESCRIPTOR_SIZE : MIN_UNTAGGED_ATTRIBUTE_DESCRIPTOR_SIZE;
   if (this->buffer->position + min_size > this->buffer->size) {
     return false;
@@ -399,7 +355,7 @@ bool AxdrParserFast::parse_attribute_descriptor_unsafe(bool tagged) {
   return parse_attribute_value(class_id, obis_code, attribute_id);
 }
 
-bool AxdrParserFast::skip_data(uint8_t type) {
+bool AxdrStreamParser::skip_data(uint8_t type) {
   int data_size = hlp_getDataTypeSize((DLMS_DATA_TYPE) type);
 
   if (data_size > 0) {
@@ -425,20 +381,20 @@ bool AxdrParserFast::skip_data(uint8_t type) {
   return true;
 }
 
-bool AxdrParserFast::skip_sequence(uint8_t type) {
+bool AxdrStreamParser::skip_sequence(uint8_t type) {
   uint8_t elements_count = read_byte();
   if (elements_count == 0xFF) {
-    ESP_LOGE(tag_.c_str(), "Invalid sequence length when skipping at position %d", this->buffer->position - 1);
+    ESP_LOGV(TAG, "Invalid sequence length when skipping at position %d", this->buffer->position - 1);
     return false;
   }
 
-  ESP_LOGD(tag_.c_str(), "Skipping %s with %d elements at position %d",
+  ESP_LOGD(TAG, "Skipping %s with %d elements at position %d",
            (type == DLMS_DATA_TYPE_STRUCTURE) ? "STRUCTURE" : "ARRAY", elements_count, this->buffer->position - 1);
 
   for (uint8_t i = 0; i < elements_count; i++) {
     uint8_t elem_type = read_byte();
     if (!parse_element(elem_type)) {
-      ESP_LOGE(tag_.c_str(), "Failed to skip element %d of %s at position %d", i + 1,
+      ESP_LOGV(TAG, "Failed to skip element %d of %s at position %d", i + 1,
                (type == DLMS_DATA_TYPE_STRUCTURE) ? "STRUCTURE" : "ARRAY", this->buffer->position - 1);
       return false;
     }
@@ -447,12 +403,12 @@ bool AxdrParserFast::skip_sequence(uint8_t type) {
   return true;
 }
 
-bool AxdrParserFast::parse_data(uint8_t type, uint8_t depth) { return skip_data(type); }
+bool AxdrStreamParser::parse_data(uint8_t type, uint8_t depth) { return skip_data(type); }
 
-bool AxdrParserFast::parse_sequence(uint8_t type, uint8_t depth) {
+bool AxdrStreamParser::parse_sequence(uint8_t type, uint8_t depth) {
   uint8_t elements_count = read_byte();
   if (elements_count == 0xFF) {
-    ESP_LOGVV(tag_.c_str(), "Invalid sequence length at position %d", this->buffer->position - 1);
+    ESP_LOGVV(TAG, "Invalid sequence length at position %d", this->buffer->position - 1);
     return false;
   }
 
@@ -462,7 +418,7 @@ bool AxdrParserFast::parse_sequence(uint8_t type, uint8_t depth) {
   if (depth > 0 && type == DLMS_DATA_TYPE_STRUCTURE && elements_count >= 2) {
     //  uint16_t saved_position = this->buffer->position;
     // start with tagged - it has higher chance to be correct
-    if (elements_count >= 4 && with_position_rollback([this](AxdrParserFast *parser) {
+    if (elements_count >= 4 && with_position_rollback([this](AxdrStreamParser *parser) {
           return parser->parse_attribute_descriptor_unsafe(true);
         })) {
       // there might be complex cases with multiple descriptors in one structure... skip for now
@@ -472,7 +428,7 @@ bool AxdrParserFast::parse_sequence(uint8_t type, uint8_t depth) {
       // just return true for now and dump the rest of the structure
       return true;
     } else if (with_position_rollback(
-                   [this](AxdrParserFast *parser) { return parser->parse_attribute_descriptor_unsafe(false); })) {
+                   [this](AxdrStreamParser *parser) { return parser->parse_attribute_descriptor_unsafe(false); })) {
       return true;
     }
   }
@@ -484,7 +440,7 @@ bool AxdrParserFast::parse_sequence(uint8_t type, uint8_t depth) {
   for (uint8_t i = 0; i < elements_count; i++) {
     uint8_t elem_type = read_byte();
     if (!parse_element(elem_type, depth + 1)) {
-      //   ESP_LOGE(tag_.c_str(), "Failed to parse element %d of %s at position %d", i + 1,
+      //   ESP_LOGV(TAG, "Failed to parse element %d of %s at position %d", i + 1,
       //            (type == DLMS_DATA_TYPE_STRUCTURE) ? "STRUCTURE" : "ARRAY", this->buffer->position - 1);
       return false;
     }
@@ -493,7 +449,7 @@ bool AxdrParserFast::parse_sequence(uint8_t type, uint8_t depth) {
   return true;
 }
 
-bool AxdrParserFast::parse_element(uint8_t type, uint8_t depth) {
+bool AxdrStreamParser::parse_element(uint8_t type, uint8_t depth) {
   if (type == DLMS_DATA_TYPE_STRUCTURE || type == DLMS_DATA_TYPE_ARRAY) {
     return parse_sequence(type, depth);
   } else {
@@ -501,19 +457,19 @@ bool AxdrParserFast::parse_element(uint8_t type, uint8_t depth) {
   }
 }
 
-size_t AxdrParserFast::parse() {
+size_t AxdrStreamParser::parse() {
   if (this->buffer == nullptr || this->buffer->size == 0) {
-    ESP_LOGE(tag_.c_str(), "Buffer is null or empty");
+    ESP_LOGV(TAG, "Buffer is null or empty");
     return 0;
   }
 
-  ESP_LOGI(tag_.c_str(), "Starting fast AXDR parsing of %d bytes", this->buffer->size);
+  ESP_LOGI(TAG, "Starting fast AXDR parsing of %d bytes", this->buffer->size);
 
   // Skip to notification flag 0x0F
   while (this->buffer->position < this->buffer->size) {
     uint8_t flag = read_byte();
     if (flag == 0x0F) {
-      ESP_LOGI(tag_.c_str(), "Found notification flag at position %d", this->buffer->position - 1);
+      ESP_LOGI(TAG, "Found notification flag at position %d", this->buffer->position - 1);
       break;
     }
   }
@@ -526,24 +482,214 @@ size_t AxdrParserFast::parse() {
   // Check for datetime object before the data
   bool is_date_time = test_if_date_time_12b();
   if (is_date_time) {
-    ESP_LOGI(tag_.c_str(), "Skipping datetime at position %d", this->buffer->position);
+    ESP_LOGI(TAG, "Skipping datetime at position %d", this->buffer->position);
     this->buffer->position += 12;
   }
 
   // First byte after flag should be the data type
   uint8_t start_type = read_byte();
   if (start_type != (uint8_t) DLMS_DATA_TYPE_STRUCTURE && start_type != (uint8_t) DLMS_DATA_TYPE_ARRAY) {
-    ESP_LOGE(tag_.c_str(), "Expected structure or array after notification flag, found type %02X at position %d",
-             start_type, this->buffer->position);
+    ESP_LOGV(TAG, "Expected structure or array after notification flag, found type %02X at position %d", start_type,
+             this->buffer->position);
     return 0;
   }
 
   // Parse the data, looking for attribute descriptors
   bool success = parse_element(start_type, 0);
   if (!success) {
-    ESP_LOGE(tag_.c_str(), "Some errors occurred parsing AXDR data");
+    ESP_LOGV(TAG, "Some errors occurred parsing AXDR data");
   }
 
-  ESP_LOGI(tag_.c_str(), "Fast parsing completed, processed %d bytes", this->buffer->position);
+  ESP_LOGI(TAG, "Fast parsing completed, processed %d bytes", this->buffer->position);
   return this->objects_found;
+}
+
+float dlms_data_as_float(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length) {
+  if (value_buffer_ptr == nullptr || value_length == 0)
+    return 0.0f;
+
+  auto be16 = [](const uint8_t *p) -> uint16_t { return (uint16_t) ((p[0] << 8) | p[1]); };
+  auto be32 = [](const uint8_t *p) -> uint32_t {
+    return ((uint32_t) p[0] << 24) | ((uint32_t) p[1] << 16) | ((uint32_t) p[2] << 8) | (uint32_t) p[3];
+  };
+  auto be64 = [](const uint8_t *p) -> uint64_t {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++)
+      v = (v << 8) | p[i];
+    return v;
+  };
+
+  switch (value_type) {
+    case DLMS_DATA_TYPE_BOOLEAN:
+    case DLMS_DATA_TYPE_ENUM:
+    case DLMS_DATA_TYPE_UINT8:
+      return static_cast<float>(value_buffer_ptr[0]);
+    case DLMS_DATA_TYPE_INT8:
+      return static_cast<float>(static_cast<int8_t>(value_buffer_ptr[0]));
+    case DLMS_DATA_TYPE_UINT16:
+      if (value_length >= 2)
+        return static_cast<float>(be16(value_buffer_ptr));
+      return 0.0f;
+    case DLMS_DATA_TYPE_INT16:
+      if (value_length >= 2) {
+        int16_t v = static_cast<int16_t>(be16(value_buffer_ptr));
+        return static_cast<float>(v);
+      }
+      return 0.0f;
+    case DLMS_DATA_TYPE_UINT32:
+      if (value_length >= 4)
+        return static_cast<float>(be32(value_buffer_ptr));
+      return 0.0f;
+    case DLMS_DATA_TYPE_INT32:
+      if (value_length >= 4) {
+        int32_t v = static_cast<int32_t>(be32(value_buffer_ptr));
+        return static_cast<float>(v);
+      }
+      return 0.0f;
+    case DLMS_DATA_TYPE_UINT64:
+      if (value_length >= 8)
+        return static_cast<float>(be64(value_buffer_ptr));
+      return 0.0f;
+    case DLMS_DATA_TYPE_INT64:
+      if (value_length >= 8) {
+        uint64_t u = be64(value_buffer_ptr);
+        int64_t v = static_cast<int64_t>(u);
+        return static_cast<float>(v);
+      }
+      return 0.0f;
+    case DLMS_DATA_TYPE_FLOAT32:
+      if (value_length >= 4) {
+        // Bytes on wire are big-endian. Ensure host float receives correct byte order.
+        uint8_t b[4] = {value_buffer_ptr[0], value_buffer_ptr[1], value_buffer_ptr[2], value_buffer_ptr[3]};
+// If host is little-endian, reverse order
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        std::swap(b[0], b[3]);
+        std::swap(b[1], b[2]);
+#endif
+        float f{};
+        std::memcpy(&f, b, sizeof(f));
+        return f;
+      }
+      return 0.0f;
+    case DLMS_DATA_TYPE_FLOAT64:
+      if (value_length >= 8) {
+        uint8_t b[8];
+        for (int i = 0; i < 8; i++)
+          b[i] = value_buffer_ptr[i];
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        for (int i = 0; i < 4; i++)
+          std::swap(b[i], b[7 - i]);
+#endif
+        double d{};
+        std::memcpy(&d, b, sizeof(d));
+        return static_cast<float>(d);
+      }
+      return 0.0f;
+    default:
+      return 0.0f;
+  }
+}
+
+std::string dlms_data_as_string(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length) {
+  if (value_buffer_ptr == nullptr && value_length == 0)
+    return std::string();
+
+  auto hex_of = [](const uint8_t *p, uint8_t len) -> std::string {
+    std::ostringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (uint8_t i = 0; i < len; i++) {
+      ss << std::setw(2) << static_cast<int>(p[i]);
+      if (i + 1 < len)
+        ss << "";  // compact
+    }
+    return ss.str();
+  };
+
+  switch (value_type) {
+    case DLMS_DATA_TYPE_OCTET_STRING:
+    case DLMS_DATA_TYPE_STRING:
+    case DLMS_DATA_TYPE_STRING_UTF8: {
+      return std::string(reinterpret_cast<const char *>(value_buffer_ptr),
+                         reinterpret_cast<const char *>(value_buffer_ptr) + value_length);
+    }
+    case DLMS_DATA_TYPE_BIT_STRING:
+    case DLMS_DATA_TYPE_BINARY_CODED_DESIMAL:
+    case DLMS_DATA_TYPE_BYREF:
+      return hex_of(value_buffer_ptr, value_length);
+
+    case DLMS_DATA_TYPE_BOOLEAN:
+    case DLMS_DATA_TYPE_ENUM:
+    case DLMS_DATA_TYPE_UINT8: {
+      return std::to_string(static_cast<unsigned>(value_buffer_ptr ? value_buffer_ptr[0] : 0));
+    }
+    case DLMS_DATA_TYPE_INT8: {
+      return std::to_string(static_cast<int>(static_cast<int8_t>(value_buffer_ptr ? value_buffer_ptr[0] : 0)));
+    }
+    case DLMS_DATA_TYPE_UINT16: {
+      if (value_length >= 2) {
+        uint16_t v = (uint16_t) ((value_buffer_ptr[0] << 8) | value_buffer_ptr[1]);
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_INT16: {
+      if (value_length >= 2) {
+        int16_t v = (int16_t) ((value_buffer_ptr[0] << 8) | value_buffer_ptr[1]);
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_UINT32: {
+      if (value_length >= 4) {
+        uint32_t v = ((uint32_t) value_buffer_ptr[0] << 24) | ((uint32_t) value_buffer_ptr[1] << 16) |
+                     ((uint32_t) value_buffer_ptr[2] << 8) | (uint32_t) value_buffer_ptr[3];
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_INT32: {
+      if (value_length >= 4) {
+        int32_t v = ((int32_t) value_buffer_ptr[0] << 24) | ((int32_t) value_buffer_ptr[1] << 16) |
+                    ((int32_t) value_buffer_ptr[2] << 8) | (int32_t) value_buffer_ptr[3];
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_UINT64: {
+      if (value_length >= 8) {
+        uint64_t v = 0;
+        for (int i = 0; i < 8; i++)
+          v = (v << 8) | value_buffer_ptr[i];
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_INT64: {
+      if (value_length >= 8) {
+        uint64_t u = 0;
+        for (int i = 0; i < 8; i++)
+          u = (u << 8) | value_buffer_ptr[i];
+        int64_t v = static_cast<int64_t>(u);
+        return std::to_string(v);
+      }
+      return std::string();
+    }
+    case DLMS_DATA_TYPE_FLOAT32:
+    case DLMS_DATA_TYPE_FLOAT64: {
+      float f = dlms_data_as_float(value_type, value_buffer_ptr, value_length);
+      // Use minimal formatting
+      std::ostringstream ss;
+      ss << f;
+      return ss.str();
+    }
+    case DLMS_DATA_TYPE_DATETIME:
+    case DLMS_DATA_TYPE_DATE:
+    case DLMS_DATA_TYPE_TIME:
+      // For now, return hex. Higher-level layers may decode properly.
+      return hex_of(value_buffer_ptr, value_length);
+
+    case DLMS_DATA_TYPE_NONE:
+    default:
+      return std::string();
+  }
 }

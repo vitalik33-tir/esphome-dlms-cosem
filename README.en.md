@@ -166,6 +166,7 @@ Parameters:
 - **id** (*Optional*) — hub id (if you have several).
 - **cp1251** (*Optional*) — cp1251 → UTF‑8 conversion. Default: true.
 - **push_mode** (*Optional*) — passive push mode. In PUSH most other params ignored. Default: false.
+- **push_show_log** (*Optional*) - show detailed log - which Cosem objects found in passive mode (Push mode). Default: false.
 
 ### Addressing: client_address & server_address
 - Not needed in PUSH mode.
@@ -192,6 +193,17 @@ Some meters output cp1251 (e.g. type at `0.0.96.1.1.255`). Enable `cp1251: true`
 ---
 
 ## Sensors
+
+Sensor configuration in polling and passive (Push) modes is identical, except that in passive mode you often don’t know in advance which objects the meter will send. To discover what the meter is pushing, enable extended logging:
+
+```yaml
+dlms_cosem:
+  push_mode: true
+  push_show_log: true
+```
+
+After that the component will print recognized COSEM objects to the log. Example log: [cosem-search.log](cosem-search.log). Disable `push_show_log` once you’ve created the needed sensors.
+
 ### Numeric sensor (`sensor`)
 ```yaml
 sensor:

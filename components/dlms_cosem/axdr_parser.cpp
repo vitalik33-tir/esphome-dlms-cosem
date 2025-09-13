@@ -282,7 +282,7 @@ bool AxdrStreamParser::parse_attribute_value(uint16_t class_id, const uint8_t *o
 
   this->objects_found++;
 
-  if (!this->show_log_) {
+  if (this->show_log_) {
     auto val_f = dlms_data_as_float((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
     auto val_s = dlms_data_as_string((DLMS_DATA_TYPE) value_type, value_ptr, value_len);
     ESP_LOGI(TAG, "# %02d  .................................................................................... ",

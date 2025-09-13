@@ -579,7 +579,7 @@ sensor:
     name: Energy
     obis_code: 1.0.1.8.0.255
     unit_of_measurement: kWh
-    accuracy_decimals: 3
+    accuracy_decimals: 0
     device_class: energy
     state_class: total_increasing
 
@@ -588,7 +588,7 @@ sensor:
     name: Energy T1
     obis_code: 1.0.1.8.1.255
     unit_of_measurement: kWh
-    accuracy_decimals: 3
+    accuracy_decimals: 0
     device_class: energy
     state_class: total_increasing
 
@@ -597,7 +597,7 @@ sensor:
     name: Energy T2
     obis_code: 1.0.1.8.2.255
     unit_of_measurement: kWh
-    accuracy_decimals: 3
+    accuracy_decimals: 0
     device_class: energy
     state_class: total_increasing
 
@@ -606,7 +606,7 @@ sensor:
     name: Active power Total
     obis_code: 1.0.1.7.0.255
     unit_of_measurement: W
-    accuracy_decimals: 1
+    accuracy_decimals: 0
     device_class: power
     state_class: measurement
 
@@ -615,7 +615,7 @@ sensor:
     name: Active power L1
     obis_code: 1.0.21.7.0.255
     unit_of_measurement: W
-    accuracy_decimals: 1
+    accuracy_decimals: 0
     device_class: power
     state_class: measurement
 
@@ -624,7 +624,7 @@ sensor:
     name: Active power L2
     obis_code: 1.0.41.7.0.255
     unit_of_measurement: W
-    accuracy_decimals: 1
+    accuracy_decimals: 0
     device_class: power
     state_class: measurement
 
@@ -633,7 +633,7 @@ sensor:
     name: Active power L3
     obis_code: 1.0.61.7.0.255
     unit_of_measurement: W
-    accuracy_decimals: 1
+    accuracy_decimals: 0
     device_class: power
     state_class: measurement
 

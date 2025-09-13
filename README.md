@@ -1,4 +1,4 @@
-[Russian version](README.md) [English version](README.end.md)
+[Русская версия](README.md) [English version](README.en.md)
 
 
 [СПОДЭС/DLMS/COSEM](https://github.com/latonita/esphome-dlms-cosem) •

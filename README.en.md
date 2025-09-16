@@ -150,6 +150,7 @@ dlms_cosem:
   id: energo_01
   cp1251: true
   push_mode: false
+  # push_custom_pattern: TV,TC,TSU,TO    # See PUSH chapter
 ```
 Parameters:
 - **client_address** (*Optional*) — client access level. 32 often used (needs password). Default: 16.
@@ -167,6 +168,7 @@ Parameters:
 - **cp1251** (*Optional*) — cp1251 → UTF‑8 conversion. Default: true.
 - **push_mode** (*Optional*) — passive push mode. In PUSH most other params ignored. Default: false.
 - **push_show_log** (*Optional*) - show detailed log - which Cosem objects found in passive mode (Push mode). Default: false.
+- **push_custom_pattern** (*Optional) - custom Cosem object pattern. Default: None.
 
 ### Addressing: client_address & server_address
 - Not needed in PUSH mode.

@@ -42,9 +42,7 @@ using ReadFunction = std::function<size_t()>;
 using DlmsRequestMaker = std::function<int()>;
 using DlmsResponseParser = std::function<int()>;
 
-struct CosemObject;
-
-using RegisterCosemObjectFunction = std::function<void(const CosemObject &object)>;
+class AxdrStreamParser;
 
 class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
  public:
@@ -81,6 +79,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
 
   void set_push_mode(bool push_mode) { this->operation_mode_push_ = push_mode; }
   void set_push_show_log(bool show_log) { this->push_show_log_ = show_log; }
+  void set_push_custom_pattern_dsl(const std::string &dsl) { this->push_custom_pattern_dsl_ = dsl; }
 
   bool has_error{true};
 
@@ -99,8 +98,10 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   uint16_t server_address_{1};
   bool auth_required_{false};
   std::string password_{""};
+
   bool operation_mode_push_{false};
   bool push_show_log_{false};
+  std::string push_custom_pattern_dsl_{""};
 
   uint32_t receive_timeout_ms_{500};
   uint32_t delay_between_requests_ms_{50};
@@ -167,20 +168,37 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void send_dlms_req_and_next(DlmsRequestMaker maker, DlmsResponseParser parser, State next_state,
                               bool mission_critical = false, bool clear_buffer = true);
 
+  // State handler methods extracted from loop()
+  void handle_comms_rx_();
+  void handle_open_session_();
+  void handle_buffers_req_();
+  void handle_buffers_rcv_();
+  void handle_association_req_();
+  void handle_association_rcv_();
+  void handle_data_enq_unit_();
+  void handle_data_enq_();
+  void handle_data_recv_();
+  void handle_data_next_();
+  void handle_session_release_();
+  void handle_disconnect_req_();
+  void handle_push_data_process_();
+  void handle_publish_();
+
   int set_sensor_scale_and_unit(DlmsCosemSensor *sensor);
   int set_sensor_value(DlmsCosemSensorBase *sensor, const char *obis);
 
-  int set_sensor_value(uint16_t, const uint8_t *, uint8_t, DLMS_DATA_TYPE, const uint8_t *, uint8_t);
+  int set_sensor_value(uint16_t class_id, const uint8_t *obis_code, DLMS_DATA_TYPE value_type,
+                       const uint8_t *value_buffer_ptr, uint8_t value_length, const int8_t *scaler,
+                       const uint8_t *unit);
 
   void indicate_transmission(bool transmission_on);
   void indicate_session(bool session_on);
   void indicate_connection(bool connection_on);
 
   bool is_push_mode() const { return this->operation_mode_push_; }
+  AxdrStreamParser * axdr_parser_{nullptr};
 
-  // void read_reply_and_go_next_state_(ReadFunction read_fn, State next_state,
-  // uint8_t retries, bool mission_critical,
-  //                                    bool check_crc);
+
   struct {
     ReadFunction read_fn;
     State next_state;
@@ -278,13 +296,13 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
 
   uint8_t failures_before_reboot_{0};
 
-  //const char *dlms_error_to_string(int error);
+  // const char *dlms_error_to_string(int error);
 
   bool try_lock_uart_session_();
   void unlock_uart_session_();
 
  public:
-  //static const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
+  // static const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
 
  private:
   static uint8_t next_obj_id_;

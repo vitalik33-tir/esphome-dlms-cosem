@@ -157,6 +157,7 @@ dlms_cosem:
   cp1251: true
   push_mode: false
   push_show_log: false
+  # push_custom_pattern: TV,TC,TSU,TO    # Подробнее в разделе PUSH
 ```
 
 Параметры:
@@ -175,6 +176,7 @@ dlms_cosem:
 - **cp1251** (*Optional*) — конвертация cp1251 → UTF‑8 для текстовых значений. По умолчанию: true.
 - **push_mode** (*Optional*) — включить пассивный режим (Push mode), если поддерживается. В режиме PUSH большинство параметров не имеют значения. По умолчанию: false.
 - **push_show_log** (*Optional*) - в пассивном режиме (Push mode) выводить подробный лог о найденных COSEM объектах. По умолчанию: false.
+- **push_custom_pattern** (*Optional) - Формат Cosem объекта. По умолчанию: нет.
 
 ### Адресация: client_address и server_address
 - Адреса не нужны, если используется режим PUSH.

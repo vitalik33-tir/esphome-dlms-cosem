@@ -1,3 +1,5 @@
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
+
 #include "axdr_parser.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
@@ -5,86 +7,12 @@
 #include <sstream>
 #include <iomanip>
 
+#include "dlms_cosem_helpers.h"
+
 namespace esphome {
 namespace dlms_cosem {
 
 constexpr const char *TAG = "dlms_cosem.axdr";
-
-const char *dlms_error_to_string(int error) {
-  switch (error) {
-    case DLMS_ERROR_CODE_OK:
-      return "DLMS_ERROR_CODE_OK";
-    case DLMS_ERROR_CODE_HARDWARE_FAULT:
-      return "DLMS_ERROR_CODE_HARDWARE_FAULT";
-    case DLMS_ERROR_CODE_TEMPORARY_FAILURE:
-      return "DLMS_ERROR_CODE_TEMPORARY_FAILURE";
-    case DLMS_ERROR_CODE_READ_WRITE_DENIED:
-      return "DLMS_ERROR_CODE_READ_WRITE_DENIED";
-    case DLMS_ERROR_CODE_UNDEFINED_OBJECT:
-      return "DLMS_ERROR_CODE_UNDEFINED_OBJECT";
-    case DLMS_ERROR_CODE_ACCESS_VIOLATED:
-      return "DLMS_ERROR_CODE_ACCESS_VIOLATED";
-    default:
-      return "";
-  }
-}
-
-const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt) {
-  switch (vt) {
-    case DLMS_DATA_TYPE_NONE:
-      return "DLMS_DATA_TYPE_NONE";
-    case DLMS_DATA_TYPE_BOOLEAN:
-      return "DLMS_DATA_TYPE_BOOLEAN";
-    case DLMS_DATA_TYPE_BIT_STRING:
-      return "DLMS_DATA_TYPE_BIT_STRING";
-    case DLMS_DATA_TYPE_INT32:
-      return "DLMS_DATA_TYPE_INT32";
-    case DLMS_DATA_TYPE_UINT32:
-      return "DLMS_DATA_TYPE_UINT32";
-    case DLMS_DATA_TYPE_OCTET_STRING:
-      return "DLMS_DATA_TYPE_OCTET_STRING";
-    case DLMS_DATA_TYPE_STRING:
-      return "DLMS_DATA_TYPE_STRING";
-    case DLMS_DATA_TYPE_BINARY_CODED_DESIMAL:
-      return "DLMS_DATA_TYPE_BINARY_CODED_DESIMAL";
-    case DLMS_DATA_TYPE_STRING_UTF8:
-      return "DLMS_DATA_TYPE_STRING_UTF8";
-    case DLMS_DATA_TYPE_INT8:
-      return "DLMS_DATA_TYPE_INT8";
-    case DLMS_DATA_TYPE_INT16:
-      return "DLMS_DATA_TYPE_INT16";
-    case DLMS_DATA_TYPE_UINT8:
-      return "DLMS_DATA_TYPE_UINT8";
-    case DLMS_DATA_TYPE_UINT16:
-      return "DLMS_DATA_TYPE_UINT16";
-    case DLMS_DATA_TYPE_INT64:
-      return "DLMS_DATA_TYPE_INT64";
-    case DLMS_DATA_TYPE_UINT64:
-      return "DLMS_DATA_TYPE_UINT64";
-    case DLMS_DATA_TYPE_ENUM:
-      return "DLMS_DATA_TYPE_ENUM";
-    case DLMS_DATA_TYPE_FLOAT32:
-      return "DLMS_DATA_TYPE_FLOAT32";
-    case DLMS_DATA_TYPE_FLOAT64:
-      return "DLMS_DATA_TYPE_FLOAT64";
-    case DLMS_DATA_TYPE_DATETIME:
-      return "DLMS_DATA_TYPE_DATETIME";
-    case DLMS_DATA_TYPE_DATE:
-      return "DLMS_DATA_TYPE_DATE";
-    case DLMS_DATA_TYPE_TIME:
-      return "DLMS_DATA_TYPE_TIME";
-    case DLMS_DATA_TYPE_ARRAY:
-      return "DLMS_DATA_TYPE_ARRAY";
-    case DLMS_DATA_TYPE_STRUCTURE:
-      return "DLMS_DATA_TYPE_STRUCTURE";
-    case DLMS_DATA_TYPE_COMPACT_ARRAY:
-      return "DLMS_DATA_TYPE_COMPACT_ARRAY";
-    case DLMS_DATA_TYPE_BYREF:
-      return "DLMS_DATA_TYPE_BYREF";
-    default:
-      return "DMS_DATA_TYPE UNKNOWN";
-  }
-}
 
 bool hlp_isValueDataType(DLMS_DATA_TYPE type) {
   switch (type) {
@@ -121,184 +49,6 @@ bool hlp_isValueDataType(DLMS_DATA_TYPE type) {
     default:
 
       return false;
-  }
-}
-float dlms_data_as_float(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length) {
-  if (value_buffer_ptr == nullptr || value_length == 0)
-    return 0.0f;
-
-  auto be16 = [](const uint8_t *p) -> uint16_t { return (uint16_t) ((p[0] << 8) | p[1]); };
-  auto be32 = [](const uint8_t *p) -> uint32_t {
-    return ((uint32_t) p[0] << 24) | ((uint32_t) p[1] << 16) | ((uint32_t) p[2] << 8) | (uint32_t) p[3];
-  };
-  auto be64 = [](const uint8_t *p) -> uint64_t {
-    uint64_t v = 0;
-    for (int i = 0; i < 8; i++)
-      v = (v << 8) | p[i];
-    return v;
-  };
-
-  switch (value_type) {
-    case DLMS_DATA_TYPE_BOOLEAN:
-    case DLMS_DATA_TYPE_ENUM:
-    case DLMS_DATA_TYPE_UINT8:
-      return static_cast<float>(value_buffer_ptr[0]);
-    case DLMS_DATA_TYPE_INT8:
-      return static_cast<float>(static_cast<int8_t>(value_buffer_ptr[0]));
-    case DLMS_DATA_TYPE_UINT16:
-      if (value_length >= 2)
-        return static_cast<float>(be16(value_buffer_ptr));
-      return 0.0f;
-    case DLMS_DATA_TYPE_INT16:
-      if (value_length >= 2) {
-        int16_t v = static_cast<int16_t>(be16(value_buffer_ptr));
-        return static_cast<float>(v);
-      }
-      return 0.0f;
-    case DLMS_DATA_TYPE_UINT32:
-      if (value_length >= 4)
-        return static_cast<float>(be32(value_buffer_ptr));
-      return 0.0f;
-    case DLMS_DATA_TYPE_INT32:
-      if (value_length >= 4) {
-        int32_t v = static_cast<int32_t>(be32(value_buffer_ptr));
-        return static_cast<float>(v);
-      }
-      return 0.0f;
-    case DLMS_DATA_TYPE_UINT64:
-      if (value_length >= 8)
-        return static_cast<float>(be64(value_buffer_ptr));
-      return 0.0f;
-    case DLMS_DATA_TYPE_INT64:
-      if (value_length >= 8) {
-        uint64_t u = be64(value_buffer_ptr);
-        int64_t v = static_cast<int64_t>(u);
-        return static_cast<float>(v);
-      }
-      return 0.0f;
-    case DLMS_DATA_TYPE_FLOAT32:
-      if (value_length >= 4) {
-        uint32_t u = be32(value_buffer_ptr);
-        float f{};
-        std::memcpy(&f, &u, sizeof(f));
-        return f;
-      }
-      return 0.0f;
-    case DLMS_DATA_TYPE_FLOAT64:
-      if (value_length >= 8) {
-        uint8_t b[8];
-        for (int i = 0; i < 8; i++)
-          b[i] = value_buffer_ptr[i];
-
-        double d{};
-        std::memcpy(&d, b, sizeof(d));
-        return static_cast<float>(d);
-      }
-      return 0.0f;
-    default:
-      return 0.0f;
-  }
-}
-std::string dlms_data_as_string(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length) {
-  if (value_buffer_ptr == nullptr && value_length == 0)
-    return std::string();
-
-  auto hex_of = [](const uint8_t *p, uint8_t len) -> std::string {
-    std::ostringstream ss;
-    ss << std::hex << std::setfill('0');
-    for (uint8_t i = 0; i < len; i++) {
-      ss << std::setw(2) << static_cast<int>(p[i]);
-      if (i + 1 < len)
-        ss << "";  // compact
-    }
-    return ss.str();
-  };
-
-  switch (value_type) {
-    case DLMS_DATA_TYPE_OCTET_STRING:
-    case DLMS_DATA_TYPE_STRING:
-    case DLMS_DATA_TYPE_STRING_UTF8: {
-      return std::string(reinterpret_cast<const char *>(value_buffer_ptr),
-                         reinterpret_cast<const char *>(value_buffer_ptr) + value_length);
-    }
-    case DLMS_DATA_TYPE_BIT_STRING:
-    case DLMS_DATA_TYPE_BINARY_CODED_DESIMAL:
-      return hex_of(value_buffer_ptr, value_length);
-
-    case DLMS_DATA_TYPE_BOOLEAN:
-    case DLMS_DATA_TYPE_ENUM:
-    case DLMS_DATA_TYPE_UINT8: {
-      return std::to_string(static_cast<unsigned>(value_buffer_ptr ? value_buffer_ptr[0] : 0));
-    }
-    case DLMS_DATA_TYPE_INT8: {
-      return std::to_string(static_cast<int>(static_cast<int8_t>(value_buffer_ptr ? value_buffer_ptr[0] : 0)));
-    }
-    case DLMS_DATA_TYPE_UINT16: {
-      if (value_length >= 2) {
-        uint16_t v = (uint16_t) ((value_buffer_ptr[0] << 8) | value_buffer_ptr[1]);
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_INT16: {
-      if (value_length >= 2) {
-        int16_t v = (int16_t) ((value_buffer_ptr[0] << 8) | value_buffer_ptr[1]);
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_UINT32: {
-      if (value_length >= 4) {
-        uint32_t v = ((uint32_t) value_buffer_ptr[0] << 24) | ((uint32_t) value_buffer_ptr[1] << 16) |
-                     ((uint32_t) value_buffer_ptr[2] << 8) | (uint32_t) value_buffer_ptr[3];
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_INT32: {
-      if (value_length >= 4) {
-        int32_t v = ((int32_t) value_buffer_ptr[0] << 24) | ((int32_t) value_buffer_ptr[1] << 16) |
-                    ((int32_t) value_buffer_ptr[2] << 8) | (int32_t) value_buffer_ptr[3];
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_UINT64: {
-      if (value_length >= 8) {
-        uint64_t v = 0;
-        for (int i = 0; i < 8; i++)
-          v = (v << 8) | value_buffer_ptr[i];
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_INT64: {
-      if (value_length >= 8) {
-        uint64_t u = 0;
-        for (int i = 0; i < 8; i++)
-          u = (u << 8) | value_buffer_ptr[i];
-        int64_t v = static_cast<int64_t>(u);
-        return std::to_string(v);
-      }
-      return std::string();
-    }
-    case DLMS_DATA_TYPE_FLOAT32:
-    case DLMS_DATA_TYPE_FLOAT64: {
-      float f = dlms_data_as_float(value_type, value_buffer_ptr, value_length);
-      // Use minimal formatting
-      std::ostringstream ss;
-      ss << f;
-      return ss.str();
-    }
-    case DLMS_DATA_TYPE_DATETIME:
-    case DLMS_DATA_TYPE_DATE:
-    case DLMS_DATA_TYPE_TIME:
-      // For now, return hex. Higher-level layers may decode properly.
-      return hex_of(value_buffer_ptr, value_length);
-
-    case DLMS_DATA_TYPE_NONE:
-    default:
-      return std::string();
   }
 }
 
@@ -344,12 +94,12 @@ uint32_t AxdrStreamParser::read_u32_() {
   return value;
 }
 
-bool AxdrStreamParser::test_if_date_time_12b_() {
-  if (this->buffer_->position + 12 > this->buffer_->size) {
+bool AxdrStreamParser::test_if_date_time_12b_(const uint8_t *buf_in) {
+  if (buf_in == nullptr && this->buffer_->position + 12 > this->buffer_->size) {
     return 0;
   }
 
-  const uint8_t *buf = this->buffer_->data + this->buffer_->position;
+  const uint8_t *buf = buf_in ? buf_in : this->buffer_->data + this->buffer_->position;
   if (!buf)
     return false;
 
@@ -512,16 +262,19 @@ size_t AxdrStreamParser::parse() {
     ESP_LOGV(TAG, "Buffer is null or empty");
     return 0;
   }
+
+  ESP_LOGI(TAG, "Starting fast AXDR parsing of %d bytes", this->buffer_->size);
+
   // Skip to notification flag 0x0F
   while (this->buffer_->position < this->buffer_->size) {
     uint8_t flag = read_byte_();
     if (flag == 0x0F) {
-      ESP_LOGD(TAG, "Found notification flag at position %d", this->buffer_->position - 1);
+      ESP_LOGI(TAG, "Found notification flag at position %d", this->buffer_->position - 1);
       break;
     }
   }
 
-  // Skip 5 bytes (invoke id and priority)
+  // Skip 5 bytes (priority and other fields)
   for (int i = 0; i < 5; i++) {
     uint8_t priority = read_byte_();
   }
@@ -529,7 +282,7 @@ size_t AxdrStreamParser::parse() {
   // Check for datetime object before the data
   bool is_date_time = test_if_date_time_12b_();
   if (is_date_time) {
-    ESP_LOGV(TAG, "Skipping datetime at position %d", this->buffer_->position);
+    ESP_LOGI(TAG, "Skipping datetime at position %d", this->buffer_->position);
     this->buffer_->position += 12;
   }
 
@@ -547,12 +300,16 @@ size_t AxdrStreamParser::parse() {
     ESP_LOGV(TAG, "Some errors occurred parsing AXDR data");
   }
 
-  ESP_LOGD(TAG, "Fast parsing completed, processed %d bytes", this->buffer_->position);
+  ESP_LOGI(TAG, "Fast parsing completed, processed %d bytes", this->buffer_->position);
   return this->objects_found_;
 }
 
-bool AxdrStreamParser::capture_generic_value_(AxdrCaptures &c) {
+bool AxdrStreamParser::capture_generic_value_(AxdrCaptures &c, uint8_t expected_type, uint8_t expected_var_len,
+                                              uint8_t replacement_type) {
   uint8_t vt = read_byte_();
+  if (expected_type != 0xFF && vt != expected_type) {
+    return false;
+  }
   if (!hlp_isValueDataType((DLMS_DATA_TYPE) vt)) {
     return false;
   }
@@ -572,11 +329,21 @@ bool AxdrStreamParser::capture_generic_value_(AxdrCaptures &c) {
     uint8_t L = read_byte_();
     if (L == 0xFF || this->buffer_->position + L > this->buffer_->size)
       return false;
+    if (expected_var_len != 0xFF && expected_var_len != L)
+      return false;
     ptr = &this->buffer_->data[this->buffer_->position];
     len = L;
     this->buffer_->position += L;
   }
-  c.value_type = (DLMS_DATA_TYPE) vt;
+
+  if (vt == DLMS_DATA_TYPE_OCTET_STRING && len == 12) {
+    bool is_date_time = test_if_date_time_12b_(ptr);
+    if (is_date_time) {
+      vt = DLMS_DATA_TYPE_DATETIME;
+    }
+  }
+
+  c.value_type = replacement_type == 0xFF ? (DLMS_DATA_TYPE) vt : (DLMS_DATA_TYPE) replacement_type;
   c.value_ptr = ptr;
   c.value_len = len;
   return true;
@@ -586,29 +353,6 @@ void AxdrStreamParser::emit_object_(const AxdrDescriptorPattern &pat, const Axdr
   if (!c.obis)
     return;
   uint16_t cid = c.class_id ? c.class_id : pat.default_class_id;
-
-  if (this->show_log_) {
-    ESP_LOGD(TAG, "Pattern match '%s' at idx %d ===============", pat.name, c.elem_idx);
-
-    auto val_f = dlms_data_as_float((DLMS_DATA_TYPE) c.value_type, c.value_ptr, c.value_len);
-    auto val_s = dlms_data_as_string((DLMS_DATA_TYPE) c.value_type, c.value_ptr, c.value_len);
-    ESP_LOGI(TAG, "Found attribute descriptor: class_id=%d, obis=%d.%d.%d.%d.%d.%d", cid, c.obis[0], c.obis[1],
-             c.obis[2], c.obis[3], c.obis[4], c.obis[5], c.value_type);
-    if (c.has_scaler_unit) {
-      ESP_LOGI(TAG, "Value type: %s, len %d, scaler %d, unit %d (%s)",
-               dlms_data_type_to_string((DLMS_DATA_TYPE) c.value_type), c.value_len, c.scaler, c.unit_enum,
-               obj_getUnitAsString(c.unit_enum));
-    } else {
-      ESP_LOGI(TAG, "Value type: %s, len %d", dlms_data_type_to_string((DLMS_DATA_TYPE) c.value_type), c.value_len);
-    }
-    ESP_LOGI(TAG, " as hex dump : %s", esphome::format_hex_pretty(c.value_ptr, c.value_len).c_str());
-    ESP_LOGI(TAG, " as string   :'%s'", val_s.c_str());
-    ESP_LOGI(TAG, " as number   : %f", val_f);
-    if (c.has_scaler_unit) {
-      ESP_LOGI(TAG, " as number * scaler  : %f", val_f * std::pow(10, c.scaler));
-    }
-  }
-
   if (callback_) {
     if (c.has_scaler_unit) {
       callback_(cid, c.obis, c.value_type, c.value_ptr, c.value_len, &c.scaler, &c.unit_enum);
@@ -620,15 +364,15 @@ void AxdrStreamParser::emit_object_(const AxdrDescriptorPattern &pat, const Axdr
 }
 
 bool AxdrStreamParser::match_pattern_(uint8_t elem_idx, const AxdrDescriptorPattern &pat,
-                                      uint8_t &elements_consumed_at_level0) {
+                                      uint8_t &elements_consumed_at_level) {
   AxdrCaptures cap{};
-  elements_consumed_at_level0 = 0;
-  uint8_t level = 0;
+  elements_consumed_at_level = 0;
+  uint32_t saved_position = buffer_->position;
+  bool upper_level = true;
   auto consume_one = [&]() {
-    if (level == 0)
-      elements_consumed_at_level0++;
+    if (upper_level)
+      elements_consumed_at_level++;
   };
-  auto initial_position = this->buffer_->position;
 
   for (const auto &step : pat.steps) {
     switch (step.type) {
@@ -641,7 +385,11 @@ bool AxdrStreamParser::match_pattern_(uint8_t elem_idx, const AxdrDescriptorPatt
         uint8_t t = read_byte_();
         if (t != step.param_u8_a)
           return false;
-        consume_one();
+        if (step.param_u8_b == PUT_BYTE_BACK) {
+          this->buffer_->position--;
+        } else {
+          consume_one();
+        }
         break;
       }
       case AxdrTokenType::EXPECT_TYPE_U_I_8: {
@@ -694,6 +442,12 @@ bool AxdrStreamParser::match_pattern_(uint8_t elem_idx, const AxdrDescriptorPatt
         consume_one();
         break;
       }
+      case AxdrTokenType::EXPECT_VALUE_DTM_AS_OCTET_STRING: {
+        if (!capture_generic_value_(cap, DLMS_DATA_TYPE_OCTET_STRING, 12, DLMS_DATA_TYPE_DATETIME))
+          return false;
+        consume_one();
+        break;
+      }
       case AxdrTokenType::EXPECT_STRUCTURE_N: {
         uint8_t t = read_byte_();
         if (t != DLMS_DATA_TYPE_STRUCTURE)
@@ -725,21 +479,22 @@ bool AxdrStreamParser::match_pattern_(uint8_t elem_idx, const AxdrDescriptorPatt
         break;
       }
       case AxdrTokenType::GOING_DOWN: {
-        level++;
+        upper_level = false;
         break;
       }
       case AxdrTokenType::GOING_UP: {
-        level--;
+        upper_level = true;
         break;
       }
       default:
         return false;
     }
   }
-  if (elements_consumed_at_level0 == 0) {
-    elements_consumed_at_level0 = 1;  // Fallback: one element to move forward
+  if (elements_consumed_at_level == 0) {
+    elements_consumed_at_level = 1;  // Fallback: one element to move forward
   }
-  cap.elem_idx = initial_position;
+  cap.elem_idx = saved_position;
+  ESP_LOGI(TAG, "Matched '%s' at idx %d", pat.name, saved_position);
   emit_object_(pat, cap);
   return true;
 }
@@ -770,6 +525,7 @@ void AxdrStreamParser::register_pattern_dsl(const char *name, const std::string 
   // A   : raw attribute id (uint8 payload, no type tag)
   // TA  : tagged attribute (type tag INT8/UINT8 + 1 byte)
   // TV  : tagged value (type tag + payload for any value type)
+  // TVOSDTM : tagged value of type OCTET_STRING with length 12, interpreted as DATETIME
   // TSU : tagged scaler+unit structure (STRUCTURE tag + count 2 + TS + TU)
   // Additionally supported:
   // TS  : tagged scaler (type tag INT8 + int8 payload)
@@ -830,15 +586,18 @@ void AxdrStreamParser::register_pattern_dsl(const char *name, const std::string 
       pat.steps.push_back({AxdrTokenType::EXPECT_SCALER_TAGGED});
     } else if (tok == "TU") {
       pat.steps.push_back({AxdrTokenType::EXPECT_UNIT_ENUM_TAGGED});
+    } else if (tok == "TV") {
+      pat.steps.push_back({AxdrTokenType::EXPECT_VALUE_GENERIC});
+    } else if (tok == "TVOSDTM") {
+      pat.steps.push_back({AxdrTokenType::EXPECT_VALUE_DTM_AS_OCTET_STRING});
     } else if (tok == "TSU") {
       pat.steps.push_back({AxdrTokenType::EXPECT_STRUCTURE_N, 2});
       pat.steps.push_back({AxdrTokenType::GOING_DOWN});
       pat.steps.push_back({AxdrTokenType::EXPECT_SCALER_TAGGED});
       pat.steps.push_back({AxdrTokenType::EXPECT_UNIT_ENUM_TAGGED});
       pat.steps.push_back({AxdrTokenType::GOING_UP});
-    } else if (tok == "V" || tok == "TV") {
-      pat.steps.push_back({AxdrTokenType::EXPECT_VALUE_GENERIC});
     } else if (tok.rfind("S", 0) == 0) {
+      // parse inside parentheses
       size_t l = tok.find('(');
       size_t r = tok.rfind(')');
       std::list<std::string> inner_tokens;
@@ -858,14 +617,14 @@ void AxdrStreamParser::register_pattern_dsl(const char *name, const std::string 
       }
       if (!inner_tokens.empty()) {
         pat.steps.push_back({AxdrTokenType::EXPECT_STRUCTURE_N, static_cast<uint8_t>(inner_tokens.size())});
-        inner_tokens.push_front("DN");
-        inner_tokens.push_back("UP");
+        inner_tokens.push_front("GO_DOWN");
+        inner_tokens.push_back("GO_UP");
         tokens.insert(std::next(it), inner_tokens.begin(), inner_tokens.end());
       }
 
-    } else if (tok == "DN") {
+    } else if (tok == "GO_DOWN") {
       pat.steps.push_back({AxdrTokenType::GOING_DOWN});
-    } else if (tok == "UP") {
+    } else if (tok == "GO_UP") {
       pat.steps.push_back({AxdrTokenType::GOING_UP});
     }
   }
@@ -875,3 +634,5 @@ void AxdrStreamParser::register_pattern_dsl(const char *name, const std::string 
 
 }  // namespace dlms_cosem
 }  // namespace esphome
+
+#endif  // ENABLE_DLMS_COSEM_PUSH_MODE

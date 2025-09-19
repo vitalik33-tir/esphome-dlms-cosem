@@ -5,7 +5,8 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include <sstream>
-
+#include <ranges>
+#include "dlms_cosem_helpers.h"
 namespace esphome {
 namespace dlms_cosem {
 
@@ -172,12 +173,15 @@ void DlmsCosemComponent::setup() {
 
   this->set_baud_rate_(this->baud_rate_handshake_);
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   if (this->is_push_mode()) {
     CosemObjectFoundCallback fn = [this](auto... args) { (void) this->set_sensor_value(args...); };
 
     this->axdr_parser_ = new AxdrStreamParser(&this->buffers_.in, fn, this->push_show_log_);
 
     // default patterns
+    this->axdr_parser_->register_pattern_dsl("HAN-DTM", "F,TO,TVOSDTM");
+    this->axdr_parser_->register_pattern_dsl("DEV-ID", "S2(TO,TV)");  // Device ID structures (2 elements)
     this->axdr_parser_->register_pattern_dsl("T1", "TC,TO,TS,TV");
     this->axdr_parser_->register_pattern_dsl("T2", "TO,TV,TSU");
     this->axdr_parser_->register_pattern_dsl("T3", "TV,TC,TSU,TO");
@@ -185,7 +189,11 @@ void DlmsCosemComponent::setup() {
 
     // user-provided pattern
     if (this->push_custom_pattern_dsl_.length() > 0) {
-      this->axdr_parser_->register_pattern_dsl("CUSTOM", this->push_custom_pattern_dsl_, 0);
+      auto split_view = this->push_custom_pattern_dsl_ | std::views::split(';');
+      for (const auto &pattern : split_view) {
+        std::string pattern_str(pattern.begin(), pattern.end());
+        this->axdr_parser_->register_pattern_dsl("CUSTOM", pattern_str, 0);
+      }
     }
 
     bool locked = false;
@@ -201,6 +209,7 @@ void DlmsCosemComponent::setup() {
       return;
     }
   }
+#endif  // ENABLE_DLMS_COSEM_PUSH_MODE
 
   this->set_timeout(BOOT_WAIT_S * 1000, [this]() {
     ESP_LOGD(TAG, "Boot timeout, component is ready to use");
@@ -231,13 +240,14 @@ void DlmsCosemComponent::register_sensor(DlmsCosemSensorBase *sensor) {
 }
 
 void DlmsCosemComponent::abort_mission_() {
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   if (this->is_push_mode()) {
     ESP_LOGV(TAG, "Push mode error, returning to listening");
     this->clear_rx_buffers_();
     this->set_next_state_(State::IDLE);
     return;
   }
-
+#endif
   // Existing pull mode logic
   ESP_LOGE(TAG, "Abort mission. Closing session");
   this->set_next_state_(State::MISSION_FAILED);
@@ -270,6 +280,8 @@ void DlmsCosemComponent::loop() {
         this->indicate_session(false);
       }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
+
       // Push mode listening logic
       if (this->is_push_mode()) {
         if (this->available() > 0) {
@@ -290,6 +302,9 @@ void DlmsCosemComponent::loop() {
           this->set_next_state_(State::COMMS_RX);
         }
       }
+#endif
+
+
     } break;
 
     case State::TRY_LOCK_BUS: {
@@ -395,9 +410,11 @@ void DlmsCosemComponent::loop() {
       this->handle_disconnect_req_();
     } break;
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
     case State::PUSH_DATA_PROCESS: {
       this->handle_push_data_process_();
     } break;
+#endif
 
     case State::PUBLISH: {
       this->handle_publish_();
@@ -425,6 +442,8 @@ void DlmsCosemComponent::handle_comms_rx_() {
     this->indicate_transmission(false);
 
     if (this->is_push_mode()) {
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
+
       // check if we received any data at all
       this->indicate_connection(true);
       if (this->buffers_.in.size > 0) {
@@ -434,7 +453,7 @@ void DlmsCosemComponent::handle_comms_rx_() {
         ESP_LOGV(TAG, "Push mode RX timeout, no data, idling");
         this->set_next_state_(State::IDLE);
       }
-
+#endif
     } else if (reading_state_.mission_critical) {
       ESP_LOGE(TAG, "Mission critical RX timeout.");
       this->abort_mission_();
@@ -446,12 +465,15 @@ void DlmsCosemComponent::handle_comms_rx_() {
     return;
   }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
+
   if (this->is_push_mode()) {
     received_frame_size_ = this->receive_frame_raw_();
     // this->update_last_rx_time_();
     //  keep reading until timeout
     return;
   }
+#endif
 
   // the following basic algorithm to be implemented to read DLMS packet
   // first version, no retries
@@ -505,10 +527,13 @@ void DlmsCosemComponent::handle_comms_rx_() {
   } else {
     ESP_LOGE(TAG, "DLMS parser fn error %d %s", parse_ret, dlms_error_to_string(parse_ret));
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
     if (this->is_push_mode()) {
       ESP_LOGV(TAG, "Push mode parse error, returning to listening");
       this->set_next_state_(State::IDLE);
-    } else if (reading_state_.mission_critical) {
+    } else 
+#endif    
+    if (reading_state_.mission_critical) {
       this->abort_mission_();
     }
     // if not critical - just move forward
@@ -579,8 +604,7 @@ void DlmsCosemComponent::handle_data_enq_unit_() {
   ESP_LOGD(TAG, "OBIS code: %s, Sensor: %s", req.c_str(), sens->get_sensor_name().c_str());
 
   // request units for numeric sensors only and only once
-  if (sens->get_type() == SensorType::SENSOR && type == DLMS_OBJECT_TYPE_REGISTER &&
-      !sens->has_got_scale_and_unit()) {
+  if (sens->get_type() == SensorType::SENSOR && type == DLMS_OBJECT_TYPE_REGISTER && !sens->has_got_scale_and_unit()) {
     // if (type == DLMS_OBJECT_TYPE_REGISTER)
     //        if (sens->get_attribute() != 2) {
     this->buffers_.gx_attribute = 3;
@@ -602,8 +626,8 @@ void DlmsCosemComponent::handle_data_enq_() {
   auto req = this->loop_state_.request_iter->first;
   auto sens = this->loop_state_.request_iter->second;
   auto type = sens->get_obis_class();
-  auto units_were_requested = (sens->get_type() == SensorType::SENSOR && type == DLMS_OBJECT_TYPE_REGISTER &&
-                               !sens->has_got_scale_and_unit());
+  auto units_were_requested =
+      (sens->get_type() == SensorType::SENSOR && type == DLMS_OBJECT_TYPE_REGISTER && !sens->has_got_scale_and_unit());
   if (units_were_requested) {
     auto ret = this->set_sensor_scale_and_unit(static_cast<DlmsCosemSensor *>(sens));
   }
@@ -649,6 +673,7 @@ void DlmsCosemComponent::handle_disconnect_req_() {
   this->prepare_and_send_dlms_disconnect();
 }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
 void DlmsCosemComponent::handle_push_data_process_() {
   this->log_state_();
   ESP_LOGD(TAG, "Processing received push data");
@@ -657,6 +682,7 @@ void DlmsCosemComponent::handle_push_data_process_() {
   this->process_push_data();
   this->clear_rx_buffers_();
 }
+#endif
 
 void DlmsCosemComponent::handle_publish_() {
   this->log_state_();
@@ -683,10 +709,12 @@ void DlmsCosemComponent::handle_publish_() {
 }
 
 void DlmsCosemComponent::update() {
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   if (this->is_push_mode()) {
     // publish?
     return;
   }
+#endif
 
   if (this->state_ != State::IDLE) {
     ESP_LOGD(TAG, "Starting data collection impossible - component not ready");
@@ -846,6 +874,7 @@ void DlmsCosemComponent::send_dlms_req_and_next(DlmsRequestMaker maker, DlmsResp
   set_next_state_(State::COMMS_TX);
 }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
 void DlmsCosemComponent::process_push_data() {
   ESP_LOGD(TAG, "Processing PUSH data frame with AXDR parser");
 
@@ -925,6 +954,8 @@ int DlmsCosemComponent::set_sensor_value(uint16_t class_id, const uint8_t *obis_
   return DLMS_ERROR_CODE_OK;
 }
 
+#endif // ENABLE_DLMS_COSEM_PUSH_MODE
+
 int DlmsCosemComponent::set_sensor_scale_and_unit(DlmsCosemSensor *sensor) {
   ESP_LOGD(TAG, "set_sensor_scale_and_unit");
   if (!buffers_.reply.complete)
@@ -949,14 +980,18 @@ int DlmsCosemComponent::set_sensor_value(DlmsCosemSensorBase *sensor, const char
   }
 
   auto vt = buffers_.reply.dataType;
-  ESP_LOGD(TAG, "OBIS code: %s, DLMS_DATA_TYPE: %s (%d)", obis, dlms_data_type_to_string(vt), vt);
+  auto object_class = sensor->get_obis_class();
+  ESP_LOGD(TAG, "Class: %d, OBIS code: %s, DLMS_DATA_TYPE: %s (%d)", object_class, obis, dlms_data_type_to_string(vt),
+           vt);
 
   //      if (cosem_rr_.result().has_value()) {
   if (this->dlms_reading_state_.last_error == DLMS_ERROR_CODE_OK) {
     // result is okay, value shall be there
 
+#ifdef USE_SENSOR
     if (sensor->get_type() == SensorType::SENSOR) {
-      if (sensor->get_obis_class() == DLMS_OBJECT_TYPE_REGISTER) {
+      if ((object_class == DLMS_OBJECT_TYPE_DATA) || (object_class == DLMS_OBJECT_TYPE_REGISTER) ||
+          (object_class == DLMS_OBJECT_TYPE_EXTENDED_REGISTER)) {
         auto var = &this->buffers_.gx_register.value;
         auto scale = static_cast<DlmsCosemSensor *>(sensor)->get_scale();
         auto unit = static_cast<DlmsCosemSensor *>(sensor)->get_unit();
@@ -971,9 +1006,10 @@ int DlmsCosemComponent::set_sensor_value(DlmsCosemSensorBase *sensor, const char
         }
       } else {
         ESP_LOGW(TAG, "Wrong OBIS class. Regular numberic sensors can only "
-                      "handle Registers (class = 3)");
+                      "handle Data (class 1), Registers (class = 3) and Extended Registers (class = 4)");
       }
     }
+#endif  // USE_SENSOR
 
 #ifdef USE_TEXT_SENSOR
     if (sensor->get_type() == SensorType::TEXT_SENSOR) {
@@ -989,13 +1025,20 @@ int DlmsCosemComponent::set_sensor_value(DlmsCosemSensorBase *sensor, const char
           arr->data[127] = '\0';
         }
         ESP_LOGV(TAG, "DATA: %s", format_hex_pretty(arr->data, arr->size).c_str());
-        auto type = sensor->get_obis_class();
 
-        if (type == DLMS_OBJECT_TYPE_DATA) {
-          static_cast<DlmsCosemTextSensor *>(sensor)->set_value(reinterpret_cast<const char *>(arr->data),
-                                                                this->cp1251_conversion_required_);
-        } else if (type == DLMS_OBJECT_TYPE_CLOCK) {
-          ESP_LOGD(TAG, "Clock sensor");
+        if ((object_class == DLMS_OBJECT_TYPE_DATA) || (object_class == DLMS_OBJECT_TYPE_REGISTER) ||
+            (object_class == DLMS_OBJECT_TYPE_EXTENDED_REGISTER)) {
+          if (vt == DLMS_DATA_TYPE_DATETIME) {
+            auto data_as_string = dlms_data_as_string(vt, arr->data, arr->size);
+            static_cast<DlmsCosemTextSensor *>(sensor)->set_value(data_as_string.c_str(),
+                                                                  this->cp1251_conversion_required_);
+          } else {
+            static_cast<DlmsCosemTextSensor *>(sensor)->set_value(reinterpret_cast<const char *>(arr->data),
+                                                                  this->cp1251_conversion_required_);
+          }
+        } else {
+          ESP_LOGW(TAG, "Wrong OBIS class. We can only handle Data (class 1), Registers (class = 3) and Extended "
+                        "Registers (class = 4)");
         }
       }
     }
@@ -1110,12 +1153,14 @@ size_t DlmsCosemComponent::receive_frame_hdlc_() {
   return receive_frame_(frame_end_check_hdlc);
 }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
 size_t DlmsCosemComponent::receive_frame_raw_() {
   auto frame_end_check_timeout = [](uint8_t *b, size_t s) {
     return false;  // never stop by content, only by timeout
   };
   return receive_frame_(frame_end_check_timeout);
 }
+#endif
 
 #ifdef IEC_HANDSHAKE
 size_t DlmsCosemComponent::receive_frame_ascii_() {
@@ -1189,9 +1234,11 @@ const char *DlmsCosemComponent::state_to_string(State state) {
       return "DISCONNECT_REQ";
     case State::PUBLISH:
       return "PUBLISH";
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
     case State::PUSH_DATA_PROCESS:
       return "PUSH_DATA_PROCESS";
-    default:
+#endif
+      default:
       return "UNKNOWN";
   }
 }

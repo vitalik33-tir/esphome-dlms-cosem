@@ -1,8 +1,11 @@
 #pragma once
 
-#include "esphome/components/sensor/sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
+
+#ifdef USE_SENSOR
+#include "esphome/components/sensor/sensor.h"
+#endif
 
 #ifdef USE_BINARY_SENSOR
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -42,7 +45,9 @@ using ReadFunction = std::function<size_t()>;
 using DlmsRequestMaker = std::function<int()>;
 using DlmsResponseParser = std::function<int()>;
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
 class AxdrStreamParser;
+#endif
 
 class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
  public:
@@ -77,9 +82,11 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void set_reboot_after_failure(uint16_t number_of_failures) { this->failures_before_reboot_ = number_of_failures; }
   void set_cp1251_conversion_required(bool required) { this->cp1251_conversion_required_ = required; }
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   void set_push_mode(bool push_mode) { this->operation_mode_push_ = push_mode; }
   void set_push_show_log(bool show_log) { this->push_show_log_ = show_log; }
   void set_push_custom_pattern_dsl(const std::string &dsl) { this->push_custom_pattern_dsl_ = dsl; }
+#endif
 
   bool has_error{true};
 
@@ -100,8 +107,10 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   std::string password_{""};
 
   bool operation_mode_push_{false};
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   bool push_show_log_{false};
   std::string push_custom_pattern_dsl_{""};
+#endif
 
   uint32_t receive_timeout_ms_{500};
   uint32_t delay_between_requests_ms_{50};
@@ -137,7 +146,9 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
     DATA_NEXT,
     SESSION_RELEASE,
     DISCONNECT_REQ,
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
     PUSH_DATA_PROCESS,  // Process received push data
+#endif
     PUBLISH,
   } state_{State::NOT_INITIALIZED};
   State last_reported_state_{State::NOT_INITIALIZED};
@@ -163,8 +174,9 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void prepare_and_send_dlms_release();
   void prepare_and_send_dlms_disconnect();
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   void process_push_data();
-
+#endif
   void send_dlms_req_and_next(DlmsRequestMaker maker, DlmsResponseParser parser, State next_state,
                               bool mission_critical = false, bool clear_buffer = true);
 
@@ -181,23 +193,27 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void handle_data_next_();
   void handle_session_release_();
   void handle_disconnect_req_();
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   void handle_push_data_process_();
+#endif
   void handle_publish_();
 
   int set_sensor_scale_and_unit(DlmsCosemSensor *sensor);
   int set_sensor_value(DlmsCosemSensorBase *sensor, const char *obis);
 
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
   int set_sensor_value(uint16_t class_id, const uint8_t *obis_code, DLMS_DATA_TYPE value_type,
                        const uint8_t *value_buffer_ptr, uint8_t value_length, const int8_t *scaler,
                        const uint8_t *unit);
-
+#endif
   void indicate_transmission(bool transmission_on);
   void indicate_session(bool session_on);
   void indicate_connection(bool connection_on);
 
   bool is_push_mode() const { return this->operation_mode_push_; }
-  AxdrStreamParser * axdr_parser_{nullptr};
-
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
+  AxdrStreamParser *axdr_parser_{nullptr};
+#endif  // ENABLE_DLMS_COSEM_PUSH_MODE
 
   struct {
     ReadFunction read_fn;

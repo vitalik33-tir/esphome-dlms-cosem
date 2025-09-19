@@ -1,4 +1,5 @@
 #pragma once
+#ifdef ENABLE_DLMS_COSEM_PUSH_MODE
 
 #include <cstdint>
 #include <functional>
@@ -14,16 +15,13 @@
 namespace esphome {
 namespace dlms_cosem {
 
-const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt);
-const char *dlms_error_to_string(int error);
-float dlms_data_as_float(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length);
-std::string dlms_data_as_string(DLMS_DATA_TYPE value_type, const uint8_t *value_buffer_ptr, uint8_t value_length);
-
 bool hlp_isValueDataType(DLMS_DATA_TYPE type);
 
 using CosemObjectFoundCallback =
     std::function<void(uint16_t class_id, const uint8_t *obis, DLMS_DATA_TYPE value_type, const uint8_t *value_ptr,
                        uint8_t value_len, const int8_t *scaler, const uint8_t *unit)>;
+
+constexpr uint8_t PUT_BYTE_BACK = 1;
 
 enum class AxdrTokenType : uint8_t {
   EXPECT_TO_BE_FIRST,
@@ -34,16 +32,18 @@ enum class AxdrTokenType : uint8_t {
   EXPECT_OBIS6_UNTAGGED,     // capture 6-byte OBIS
   EXPECT_ATTR8_UNTAGGED,     // capture attribute id (accept INT8/UINT8 depending on flags)
   EXPECT_VALUE_GENERIC,      // capture value: first byte is type tag; supports fixed/variable lengths
-  EXPECT_STRUCTURE_N,        // expect a structure with element count = param_u8_a
-  EXPECT_SCALER_TAGGED,      // capture scaler (INT8 or UINT8)
-  EXPECT_UNIT_ENUM_TAGGED,   // capture unit enum (ENUM base + 1 byte value)
-  GOING_DOWN,                // capture going down
-  GOING_UP,                  // capture going up
+  EXPECT_VALUE_DTM_AS_OCTET_STRING,
+  EXPECT_STRUCTURE_N,       // expect a structure with element count = param_u8_a
+  EXPECT_SCALER_TAGGED,     // capture scaler (INT8 or UINT8)
+  EXPECT_UNIT_ENUM_TAGGED,  // capture unit enum (ENUM base + 1 byte value)
+  GOING_DOWN,               // capture going down
+  GOING_UP,                 // capture going up
 };
 
 struct AxdrPatternStep {
   AxdrTokenType type;
   uint8_t param_u8_a{0};
+  uint8_t param_u8_b{0};
 };
 
 struct AxdrDescriptorPattern {
@@ -93,7 +93,7 @@ class AxdrStreamParser {
   uint16_t read_u16_();
   uint32_t read_u32_();
 
-  bool test_if_date_time_12b_();
+  bool test_if_date_time_12b_(const uint8_t *buf_in = nullptr);
 
   bool parse_element_(uint8_t type, uint8_t depth = 0);
   bool parse_sequence_(uint8_t type, uint8_t depth = 0);
@@ -103,7 +103,8 @@ class AxdrStreamParser {
 
   bool try_match_patterns_(uint8_t elem_idx);
   bool match_pattern_(uint8_t elem_idx, const AxdrDescriptorPattern &pat, uint8_t &elements_consumed_at_level);
-  bool capture_generic_value_(AxdrCaptures &c);
+  bool capture_generic_value_(AxdrCaptures &c, uint8_t expected_type = 0xFF, uint8_t expected_var_len = 0xFF,
+                              uint8_t replacement_type = 0xFF);
   void emit_object_(const AxdrDescriptorPattern &pat, const AxdrCaptures &c);
 
  public:
@@ -114,5 +115,9 @@ class AxdrStreamParser {
   void clear_patterns() { registry_.clear(); }
 };
 
+
 }  // namespace dlms_cosem
 }  // namespace esphome
+
+
+#endif // ENABLE_DLMS_COSEM_PUSH_MODE

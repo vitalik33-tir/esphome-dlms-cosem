@@ -310,57 +310,57 @@ const char *dlms_error_to_string(int error) {
 const char *dlms_data_type_to_string(DLMS_DATA_TYPE vt) {
   switch (vt) {
     case DLMS_DATA_TYPE_NONE:
-      return "DLMS_DATA_TYPE_NONE";
+      return "NONE";
     case DLMS_DATA_TYPE_BOOLEAN:
-      return "DLMS_DATA_TYPE_BOOLEAN";
+      return "BOOLEAN";
     case DLMS_DATA_TYPE_BIT_STRING:
-      return "DLMS_DATA_TYPE_BIT_STRING";
+      return "BIT_STRING";
     case DLMS_DATA_TYPE_INT32:
-      return "DLMS_DATA_TYPE_INT32";
+      return "INT32";
     case DLMS_DATA_TYPE_UINT32:
-      return "DLMS_DATA_TYPE_UINT32";
+      return "UINT32";
     case DLMS_DATA_TYPE_OCTET_STRING:
-      return "DLMS_DATA_TYPE_OCTET_STRING";
+      return "OCTET_STRING";
     case DLMS_DATA_TYPE_STRING:
-      return "DLMS_DATA_TYPE_STRING";
+      return "STRING";
     case DLMS_DATA_TYPE_BINARY_CODED_DESIMAL:
-      return "DLMS_DATA_TYPE_BINARY_CODED_DESIMAL";
+      return "BINARY_CODED_DESIMAL";
     case DLMS_DATA_TYPE_STRING_UTF8:
-      return "DLMS_DATA_TYPE_STRING_UTF8";
+      return "STRING_UTF8";
     case DLMS_DATA_TYPE_INT8:
-      return "DLMS_DATA_TYPE_INT8";
+      return "INT8";
     case DLMS_DATA_TYPE_INT16:
-      return "DLMS_DATA_TYPE_INT16";
+      return "INT16";
     case DLMS_DATA_TYPE_UINT8:
-      return "DLMS_DATA_TYPE_UINT8";
+      return "UINT8";
     case DLMS_DATA_TYPE_UINT16:
-      return "DLMS_DATA_TYPE_UINT16";
+      return "UINT16";
     case DLMS_DATA_TYPE_INT64:
-      return "DLMS_DATA_TYPE_INT64";
+      return "INT64";
     case DLMS_DATA_TYPE_UINT64:
-      return "DLMS_DATA_TYPE_UINT64";
+      return "UINT64";
     case DLMS_DATA_TYPE_ENUM:
-      return "DLMS_DATA_TYPE_ENUM";
+      return "ENUM";
     case DLMS_DATA_TYPE_FLOAT32:
-      return "DLMS_DATA_TYPE_FLOAT32";
+      return "FLOAT32";
     case DLMS_DATA_TYPE_FLOAT64:
-      return "DLMS_DATA_TYPE_FLOAT64";
+      return "FLOAT64";
     case DLMS_DATA_TYPE_DATETIME:
-      return "DLMS_DATA_TYPE_DATETIME";
+      return "DATETIME";
     case DLMS_DATA_TYPE_DATE:
-      return "DLMS_DATA_TYPE_DATE";
+      return "DATE";
     case DLMS_DATA_TYPE_TIME:
-      return "DLMS_DATA_TYPE_TIME";
+      return "TIME";
     case DLMS_DATA_TYPE_ARRAY:
-      return "DLMS_DATA_TYPE_ARRAY";
+      return "ARRAY";
     case DLMS_DATA_TYPE_STRUCTURE:
-      return "DLMS_DATA_TYPE_STRUCTURE";
+      return "STRUCTURE";
     case DLMS_DATA_TYPE_COMPACT_ARRAY:
-      return "DLMS_DATA_TYPE_COMPACT_ARRAY";
+      return "COMPACT_ARRAY";
     case DLMS_DATA_TYPE_BYREF:
-      return "DLMS_DATA_TYPE_BYREF";
+      return "BYREF";
     default:
-      return "DMS_DATA_TYPE UNKNOWN";
+      return "UNKNOWN";
   }
 }
 

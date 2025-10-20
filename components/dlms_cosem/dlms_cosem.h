@@ -296,7 +296,7 @@ class DlmsCosemComponent : public PollingComponent, public uart::UARTDevice {
   void report_failure(bool failure);
   void abort_mission_();
 
-  const char *state_to_string(State state);
+  const LogString *state_to_string(State state);
   void log_state_(State *next_state = nullptr);
 
   struct Stats {

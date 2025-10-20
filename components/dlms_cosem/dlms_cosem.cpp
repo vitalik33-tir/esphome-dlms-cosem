@@ -191,8 +191,11 @@ void DlmsCosemComponent::setup() {
     if (this->push_custom_pattern_dsl_.length() > 0) {
       auto split_view = this->push_custom_pattern_dsl_ | std::views::split(';');
       for (const auto &pattern : split_view) {
-        std::string pattern_str(pattern.begin(), pattern.end());
-        this->axdr_parser_->register_pattern_dsl("CUSTOM", pattern_str, 0);
+          std::string pattern_str;
+          for (auto it = pattern.begin(); it != pattern.end(); ++it) {
+            pattern_str += *it;
+          }
+          this->axdr_parser_->register_pattern_dsl("CUSTOM", pattern_str, 0);
       }
     }
 
@@ -1194,61 +1197,61 @@ void DlmsCosemComponent::clear_rx_buffers_() {
   this->buffers_.in.position = 0;
 }
 
-const char *DlmsCosemComponent::state_to_string(State state) {
+const LogString *DlmsCosemComponent::state_to_string(State state) {
   switch (state) {
     case State::NOT_INITIALIZED:
-      return "NOT_INITIALIZED";
+      return LOG_STR("NOT_INITIALIZED");
     case State::IDLE:
-      return "IDLE";
+      return LOG_STR("IDLE");
     case State::TRY_LOCK_BUS:
-      return "TRY_LOCK_BUS";
+      return LOG_STR("TRY_LOCK_BUS");
     case State::WAIT:
-      return "WAIT";
+      return LOG_STR("WAIT");
     case State::COMMS_TX:
-      return "COMMS_TX";
+      return LOG_STR("COMMS_TX");
     case State::COMMS_RX:
-      return "COMMS_RX";
+      return LOG_STR("COMMS_RX");
     case State::MISSION_FAILED:
-      return "MISSION_FAILED";
+      return LOG_STR("MISSION_FAILED");
     case State::OPEN_SESSION:
-      return "OPEN_SESSION";
+      return LOG_STR("OPEN_SESSION");
     case State::BUFFERS_REQ:
-      return "BUFFERS_REQ";
+      return LOG_STR("BUFFERS_REQ");
     case State::BUFFERS_RCV:
-      return "BUFFERS_RCV";
+      return LOG_STR("BUFFERS_RCV");
     case State::ASSOCIATION_REQ:
-      return "ASSOCIATION_REQ";
+      return LOG_STR("ASSOCIATION_REQ");
     case State::ASSOCIATION_RCV:
-      return "ASSOCIATION_RCV";
+      return LOG_STR("ASSOCIATION_RCV");
     case State::DATA_ENQ_UNIT:
-      return "DATA_ENQ_UNIT";
+      return LOG_STR("DATA_ENQ_UNIT");
     case State::DATA_ENQ:
-      return "DATA_ENQ";
+      return LOG_STR("DATA_ENQ");
     case State::DATA_RECV:
-      return "DATA_RECV";
+      return LOG_STR("DATA_RECV");
     case State::DATA_NEXT:
-      return "DATA_NEXT";
+      return LOG_STR("DATA_NEXT");
     case State::SESSION_RELEASE:
-      return "SESSION_RELEASE";
+      return LOG_STR("SESSION_RELEASE");
     case State::DISCONNECT_REQ:
-      return "DISCONNECT_REQ";
+      return LOG_STR("DISCONNECT_REQ");
     case State::PUBLISH:
-      return "PUBLISH";
+      return LOG_STR("PUBLISH");
 #ifdef ENABLE_DLMS_COSEM_PUSH_MODE
     case State::PUSH_DATA_PROCESS:
-      return "PUSH_DATA_PROCESS";
+      return LOG_STR("PUSH_DATA_PROCESS");
 #endif
       default:
-      return "UNKNOWN";
+      return LOG_STR("UNKNOWN");
   }
 }
 
 void DlmsCosemComponent::log_state_(State *next_state) {
   if (this->state_ != this->last_reported_state_) {
     if (next_state == nullptr) {
-      ESP_LOGV(TAG, "State::%s", state_to_string(this->state_));
+      ESP_LOGV(TAG, "State::%s", LOG_STR_ARG(state_to_string(this->state_)));
     } else {
-      ESP_LOGV(TAG, "State::%s -> %s", state_to_string(this->state_), state_to_string(*next_state));
+      ESP_LOGV(TAG, "State::%s -> %s", LOG_STR_ARG(state_to_string(this->state_)), LOG_STR_ARG(state_to_string(*next_state)));
     }
     this->last_reported_state_ = this->state_;
   }

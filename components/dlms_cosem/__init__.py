@@ -155,7 +155,7 @@ async def to_code(config):
         cg.add(var.set_push_show_log(config[CONF_PUSH_SHOW_LOG]))
         cg.add(var.set_push_custom_pattern_dsl(config[CONF_PUSH_CUSTOM_PATTERN]))
     
-    cg.add_build_flag("-Wno-error=implicit-function-declaration")
-    cg.add_library("GuruxDLMS", None, "https://github.com/latonita/GuruxDLMS.c#platformio")
+    #cg.add_build_flag("-Wno-error=implicit-function-declaration")
+    cg.add_library("GuruxDLMS", None, "https://github.com/latonita/GuruxDLMS.c")
     # Its a hard-copy of this one, which is a 2-y.o. fork of official gurux repo + platformio json lib file
     # cg.add_library("GuruxDLMS", None, "https://github.com/viric/GuruxDLMS.c#platformio")

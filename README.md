@@ -12,7 +12,7 @@
 [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble)
 
 # esphome-dlms-cosem
-Подключение EspHome к счетчикам электроэнергии по протоколу DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар, ZPA AM375 и многие другие) через RS-485 интерфейст или через оптопорт(*). Кроме того, возможно подключение через Bluetooth BLE UART (Нартис И300/И100), используя компонент [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble).
+Подключение EspHome к счетчикам электроэнергии по протоколу DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар, ZPA AM375 и многие другие) через RS-485 интерфейст или через оптопорт(*). Кроме того, возможно подключение через Bluetooth BLE UART (НАРТИС-И100-SP1 и НАРТИС-И300-SP31), используя компонент [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble).
 
 Два режима работы - запрос-ответ и режим ожидания данных от счетчика (PUSH).
 

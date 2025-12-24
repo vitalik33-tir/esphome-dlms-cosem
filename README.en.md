@@ -7,10 +7,11 @@
 [SPb ZIP CE2727A](https://github.com/latonita/esphome-ce2727a-meter) •
 [Lenelektro LE-2](https://github.com/latonita/esphome-le2-meter) •
 [Pulsar-M](https://github.com/latonita/esphome-pulsar-m) •
-[Energomera BLE](https://github.com/latonita/esphome-energomera-ble)
+[Energomera BLE](https://github.com/latonita/esphome-energomera-ble) •
+[Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble)
 
 # esphome-dlms-cosem
-ESPHome integration for DLMS/COSEM (SPODES) electricity meters (Energomera CE207/CE307/CE308, Milur 107S, MIR, Nartis, RiM, Pulsar, ZPA AM375 and many others) via RS‑485 or optical port (*).
+ESPHome integration for DLMS/COSEM (SPODES) electricity meters (Energomera CE207/CE307/CE308, Milur 107S, MIR, Nartis, RiM, Pulsar, ZPA AM375 and many others) via RS‑485 or optical port (*). Additionally, Bluetooth BLE UART connection is possible (Nartis I300/I100) using the [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble) component.
 
 Two operating modes: request/response polling and passive PUSH (meter-originated data).
 
@@ -36,6 +37,7 @@ For ESP32/ESP8266 physical wiring examples see: https://github.com/latonita/esph
 - [Multiple meters](#multiple-meters)
 - [Meter specifics](#meter-specifics)
   - [Nartis I100-W112](#nartis-i100-w112)
+  - [Nartis I300/I100 RF2400 - Bluetooth BLE](#nartis-i300i100-rf2400---bluetooth-ble)
   - [RiM489.38 and related models](#rim48938-and-related-models)
 - [Configuration examples](#configuration-examples)
   - [Single-phase meter (Category D)](#single-phase-meter-category-d)
@@ -49,12 +51,13 @@ For ESP32/ESP8266 physical wiring examples see: https://github.com/latonita/esph
 - Polling mode and passive PUSH mode
 - Basic numeric data types (int/float)
 - Basic textual data (octet-string)
+- Major obis classes - 1 (Data), 2 (Register), 3 (Extended Register)
+- Clock obis class - 8 (Clocj) 
 - Cyrillic (cp1251) decoding to UTF‑8 (Nartis I100-W112, RiM 489, …)
 - Logical & physical address specification
 - Multiple meters on one bus
 
 ## Roadmap / Future Ideas
-- Datetime objects
 - Time synchronization
 - Relay control
 - Full optical head speed negotiation (300 → 9600)
@@ -344,6 +347,54 @@ sensor:
   * Physical address: 17
   * Address size: 2
 
+## Nartis I300/I100 RF2400 - Bluetooth BLE
+Nartis meters with RF2400 option can be connected via the companion `ble_nus_client` component. See [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble).
+Tested with NARTIS-I300-SP31-2-A1R1-230-5-100A-TN-RF2400/2-RS485-P1-EНKMOQ1V3-D.
+
+```yaml
+
+external_components:
+  - source: github://latonita/esphome-dlms-cosem
+    refresh: 10s
+    components: [dlms_cosem]
+  - source: github://latonita/esphome-nordic-uart-ble
+    refresh: 10s
+    components: [ble_nus_client]
+  
+ble_client:
+  - mac_address: "11:22:33:44:55:66" # Bluetooth MAC address of the meter
+    id: nartis_i300_ble
+    auto_connect: false
+    
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 300ms
+    window: 300ms
+    active: true    
+    continuous: false
+
+ble_nus_client:
+  id: ble_uart
+  pin: 123456  # Bluetooth PIN code
+  service_uuid: 6e400001-b5a3-f393-e0a9-e50e24dc4179
+  rx_uuid: 6e400002-b5a3-f393-e0a9-e50e24dc4179
+  tx_uuid: 6e400003-b5a3-f393-e0a9-e50e24dc4179   
+  mtu: 247
+  connect_on_demand: true
+  idle_timeout: 5min
+
+dlms_cosem:
+  id: nartis_dlms
+  uart_id: ble_uart
+  client_address: 32
+  server_address: 1
+  auth: true
+  password: "00002080"  # Access password. Your password may differ - check your meter documentation.
+  receive_timeout: 5000ms
+  update_interval: 60s
+
+
+```
 ## RiM489.38 and related models
 - Device type in Russian: for `0.0.96.1.1.255` use `cp1251: true`.
 
@@ -497,6 +548,11 @@ sensor:
 
 text_sensor:
   - platform: dlms_cosem
+    name: Date/Time
+    obis_code: 0.0.1.0.0.255
+    entity_category: diagnostic
+    class: 8
+  - platform: dlms_cosem
     name: Serial Number
     obis_code: 0.0.96.1.0.255
     entity_category: diagnostic
@@ -547,6 +603,12 @@ dlms_cosem:
   push_mode: true
 
 text_sensor:
+  - platform: dlms_cosem
+    name: Date/Time
+    obis_code: 0.0.1.0.0.255
+    entity_category: diagnostic
+    class: 8
+
   - platform: dlms_cosem
     name: Serial number
     obis_code: 0.0.96.1.1.255

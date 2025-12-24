@@ -8,10 +8,11 @@
 [СПб ЗИП ЦЭ2727А](https://github.com/latonita/esphome-ce2727a-meter) •
 [Ленэлектро ЛЕ-2](https://github.com/latonita/esphome-le2-meter) •
 [Пульсар-М](https://github.com/latonita/esphome-pulsar-m) •
-[Энергомера BLE](https://github.com/latonita/esphome-energomera-ble)
+[Энергомера BLE](https://github.com/latonita/esphome-energomera-ble) •
+[Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble)
 
 # esphome-dlms-cosem
-Подключение EspHome к счетчикам электроэнергии по протоколу DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар, ZPA AM375 и многие другие) через RS-485 интерфейст или через оптопорт(*).
+Подключение EspHome к счетчикам электроэнергии по протоколу DLMS/COSEM/СПОДЭС (Энергомера CE207/CE307/CE308, Милур 107S, Мир, Нартис, РиМ, Пульсар, ZPA AM375 и многие другие) через RS-485 интерфейст или через оптопорт(*). Кроме того, возможно подключение через Bluetooth BLE UART (Нартис И300/И100), используя компонент [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble).
 
 Два режима работы - запрос-ответ и режим ожидания данных от счетчика (PUSH).
 
@@ -38,6 +39,7 @@
 - [Несколько счётчиков](#несколько-счётчиков)
 - [Особенности счетчиков](#особенности-счетчиков)
   - [Нартис И100-W112](#нартис-и100-w112)
+  - [Нартис И300/И100 RF2400 - Bluetooth BLE](#нартис-и300и100-rf2400---bluetooth-ble)
   - [РиМ489.38 и другие из серии](#рим48938-и-другие-из-серии)
 - [Примеры конфигураций](#примеры-конфигураций)
   - [Однофазный счетчик (ПУ категории D)](#однофазный-счетчик-пу-категории-d)
@@ -51,13 +53,14 @@
 - Работа в режиме опроса счетчика и режиме ожидания
 - Поддержка базовых цифровых типов данных (int/float)
 - Поддержка базовых текстовых данных (octet-string)
+- Поддержка OBIS классов 1 (Данные), 2 (Регистр), 3 (Расширенный регистр)
+- Поддержка OBIS класса 8 (Часы)
 - Поддержка русских символов в ответах от счетчиков (Нартис И100-W112, РиМ 489 , ... )
 - Задание логического и физического адресов
 - Работа с несколькими счетчиками на одной шине
 
 
 ## Возможные задачи на будущее
-- Работа с данными типа datetime
 - Синхронизация времени
 - Управление реле
 - Полноценная работа через оптопорт по стандартной процедуре (300 → 9600)
@@ -238,6 +241,7 @@ text_sensor:
   - platform: dlms_cosem
     name: Type
     obis_code: 0.0.96.1.1.255
+    # obis_class: 8         # для объектов CLOCK (класс 8) необходимо указать класс вручную
     dont_publish: false
     # cp1251: false         # переопределение настройки хаба (опционально)
     entity_category: diagnostic
@@ -361,8 +365,57 @@ sensor:
     * Физический адрес: 17
     * Размер адреса: 2
 
+## Нартис И300/И100 RF2400 - Bluetooth BLE
+Счетчики Нартис с опцией RF2400 могут быть подключены через соседний компонент `ble_nus_client`. См. [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble).
+Проверено с НАРТИС-И300-SP31-2-A1R1-230-5-100A-TN-RF2400/2-RS485-P1-EНKMOQ1V3-D.
+
+```yaml
+
+external_components:
+  - source: github://latonita/esphome-dlms-cosem
+    refresh: 10s
+    components: [dlms_cosem]
+  - source: github://latonita/esphome-nordic-uart-ble
+    refresh: 10s
+    components: [ble_nus_client]
+  
+ble_client:
+  - mac_address: "11:22:33:44:55:66" # Bluetooth MAC адрес счетчика
+    id: nartis_i300_ble
+    auto_connect: false
+    
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 300ms
+    window: 300ms
+    active: true    
+    continuous: false
+
+ble_nus_client:
+  id: ble_uart
+  pin: 123456  # пин код Bluetooth
+  service_uuid: 6e400001-b5a3-f393-e0a9-e50e24dc4179
+  rx_uuid: 6e400002-b5a3-f393-e0a9-e50e24dc4179
+  tx_uuid: 6e400003-b5a3-f393-e0a9-e50e24dc4179   
+  mtu: 247
+  connect_on_demand: true
+  idle_timeout: 5min
+
+dlms_cosem:
+  id: nartis_dlms
+  uart_id: ble_uart
+  client_address: 32
+  server_address: 1
+  auth: true
+  password: "00002080"  # Пароль доступа. Ваш пароль может быть другим - проверьте паспорт на ваш прибор учета.
+  receive_timeout: 5000ms
+  update_interval: 60s
+
+
+```
 ## РиМ489.38 и другие из серии
 - Передает тип ПУ на русском языке. Для текстового сенсора `0.0.96.1.1.255` необходимо установить `cp1251: true`
+
 
 # Примеры конфигураций
 
@@ -378,8 +431,6 @@ esphome:
 
 esp32:
   board: esp32dev
-  framework:
-    type: arduino
 
 external_components:
   - source: github://latonita/esphome-dlms-cosem
@@ -518,6 +569,11 @@ sensor:
 
 text_sensor:
   - platform: dlms_cosem
+    name: Date/Time
+    obis_code: 0.0.1.0.0.255
+    entity_category: diagnostic
+    class: 8
+  - platform: dlms_cosem
     name: Serial Number
     obis_code: 0.0.96.1.0.255
     entity_category: diagnostic
@@ -581,6 +637,12 @@ dlms_cosem:
 
 text_sensor:
   - platform: dlms_cosem
+    name: Date/Time
+    obis_code: 0.0.1.0.0.255
+    entity_category: diagnostic
+    class: 8
+
+  - platform: dlms_cosem
     name: Serial number
     obis_code: 0.0.96.1.1.255
     entity_category: diagnostic
@@ -591,7 +653,6 @@ text_sensor:
     entity_category: diagnostic
 
 sensor:
-
   - platform: dlms_cosem
     id: active_energy_consumed
     name: Energy
@@ -669,4 +730,4 @@ sensor:
 ---
 
 ## Лицензия
-См. LICENSE в репозитории.
+См. [LICENSE](LICENSE) в репозитории.

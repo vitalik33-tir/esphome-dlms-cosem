@@ -8,7 +8,7 @@ from . import (
     CONF_DLMS_COSEM_ID,
     CONF_OBIS_CODE,
     CONF_DONT_PUBLISH,
-    CONF_CLASS,
+    CONF_OBIS_CLASS,
     CONF_CP1251,
 )
 
@@ -27,7 +27,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_DLMS_COSEM_ID): cv.use_id(DlmsCosem),
             cv.Required(CONF_OBIS_CODE): obis_code,
             cv.Optional(CONF_DONT_PUBLISH, default=False): cv.boolean,
-            cv.Optional(CONF_CLASS, default=1): cv.int_,
+            cv.Optional(CONF_OBIS_CLASS, default=1): cv.int_,
             cv.Optional(CONF_CP1251): cv.boolean,
         }
     ),
@@ -40,7 +40,7 @@ async def to_code(config):
     var = await text_sensor.new_text_sensor(config)
     cg.add(var.set_obis_code(config[CONF_OBIS_CODE]))
     cg.add(var.set_dont_publish(config.get(CONF_DONT_PUBLISH)))
-    cg.add(var.set_obis_class(config[CONF_CLASS]))
+    cg.add(var.set_obis_class(config[CONF_OBIS_CLASS]))
 
     if conf := config.get(CONF_CP1251):
         cg.add(var.set_cp1251_conversion_required(config[CONF_CP1251]))

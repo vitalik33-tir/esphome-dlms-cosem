@@ -599,8 +599,8 @@ text_sensor:
 
 ```yaml
 esphome:
-  name: energomera-ce207-spds
-  friendly_name: Energomera-ce207-spds
+  name: zpa-am375
+  friendly_name: zpa-am375
 
 esp32:
   board: esp32dev
